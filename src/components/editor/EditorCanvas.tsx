@@ -52,6 +52,8 @@ export function fitContain(imgW: number, imgH: number, boxW: number, boxH: numbe
 
 /** Points closer than this (display px) to the previous one are skipped. */
 const MIN_STEP = 1.5;
+/** Finger path smoothing (0…1, lower = smoother); removes jitter that would ripple the push. */
+const SMOOTHING = 0.35;
 
 /**
  * Live preview. Subscribes only to colour/reshape state, so slider drags
@@ -98,6 +100,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const cursorY = useSharedValue(0);
   const cursorOpacity = useSharedValue(0);
   const last = useRef<{ x: number; y: number } | null>(null);
+  const smoothed = useRef<{ x: number; y: number } | null>(null);
 
   // Show the brush size in the middle of the photo whenever it changes.
   useEffect(() => {
@@ -131,17 +134,23 @@ export const EditorCanvas = memo(function EditorCanvas({
     if (!brush) return;
     const radiusOfSource = brush.radius * frameShortOfSource();
     last.current = { x, y };
+    smoothed.current = { x, y };
     useEditorStore.getState().beginStroke(toSource(x, y), radiusOfSource, brush.strength);
   };
   const strokeMove = (x: number, y: number) => {
     const prev = last.current;
-    if (!prev || Math.hypot(x - prev.x, y - prev.y) < MIN_STEP) return;
-    last.current = { x, y };
-    useEditorStore.getState().extendStroke(toSource(x, y));
+    const s = smoothed.current;
+    if (!prev || !s) return;
+    s.x += (x - s.x) * SMOOTHING;
+    s.y += (y - s.y) * SMOOTHING;
+    if (Math.hypot(s.x - prev.x, s.y - prev.y) < MIN_STEP) return;
+    last.current = { x: s.x, y: s.y };
+    useEditorStore.getState().extendStroke(toSource(s.x, s.y));
   };
   const strokeEnd = () => {
     if (!last.current) return;
     last.current = null;
+    smoothed.current = null;
     useEditorStore.getState().commit();
   };
 

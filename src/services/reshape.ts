@@ -62,8 +62,10 @@ const STEP = 0.15;
  * Most a single stroke can move content, relative to the brush radius. The
  * push eases off as a stroke approaches it (and stops there), so one drag only
  * nudges — bigger changes take several small strokes, like in retouching apps.
+ * With the falloff below this keeps local squash/stretch within ~18 %, where
+ * skin texture still reads as natural.
  */
-const MAX_TRAVEL = 0.22;
+const MAX_TRAVEL = 0.12;
 
 export class ReshapeField {
   readonly gw: number;
@@ -155,8 +157,9 @@ export class ReshapeField {
         const px = i + 0.5;
         const t2 = ((px - cx) ** 2 + (py - cy) ** 2) / r2;
         if (t2 >= 1) continue;
-        // Cubic falloff: strong in the middle, gentle toward the rim.
-        const w = (1 - t2) * (1 - t2) * (1 - t2);
+        // Smooth bump: flat in the middle (the centre moves almost rigidly),
+        // gentlest overall slope, zero slope at the rim.
+        const w = (1 - t2) * (1 - t2);
         // New map: S'(p) = S(p − m·w)  ⇒  d'(p) = d(p − m·w) − m·w
         const qx = px - mx * w;
         const qy = py - my * w;

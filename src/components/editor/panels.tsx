@@ -156,7 +156,7 @@ export interface BrushSettings {
   spotSize: number;
 }
 
-export const DEFAULT_BRUSH: BrushSettings = { mode: 'push', size: 35, strength: 35, spotSize: 20 };
+export const DEFAULT_BRUSH: BrushSettings = { mode: 'push', size: 45, strength: 40, spotSize: 20 };
 
 /**
  * Panel sliders → brush. 밀기: radius 3…15 % of the short side, content
@@ -239,7 +239,7 @@ export function TouchPanel({ brush, onChange }: { brush: BrushSettings; onChange
             {trash}
           </View>
           <Text style={styles.reshapeHint}>
-            짧게 여러 번 밀수록 자연스러워요.{'\n'}턱선·볼은 바깥에서 안쪽으로 조금씩 밀어 주세요.
+            브러시를 넉넉하게 키우고 짧게 여러 번 밀면 자연스러워요.{'\n'}턱선·볼은 바깥에서 안쪽으로 조금씩 밀어 주세요.
           </Text>
         </>
       )}
