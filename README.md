@@ -147,6 +147,8 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 
 ## Web 지원 범위
 
+배포: `vercel.json`이 `expo export -p web` 결과(`dist/`)를 SPA로 서빙합니다(모든 경로 → `/`). 이 파일이 없으면 Vercel이 저장소를 빌드 없이 그대로 올려, `/`에서 `index.ts`가 `video/mp2t`로 내려가 다운로드됩니다.
+
 `npm run web`으로 UI와 필터/편집 흐름을 확인할 수 있습니다. Skia는 CanvasKit(WASM)으로 동작합니다.
 
 - 카메라: 브라우저 getUserMedia. 플래시·셔터음은 지원되지 않습니다.
