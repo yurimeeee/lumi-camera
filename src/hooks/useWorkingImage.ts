@@ -6,6 +6,8 @@ import { applyGeometry, PREVIEW_MAX_SIDE } from '@/services/imagePipeline';
 import type { Geometry, SourceImage } from '@/types/editing';
 
 export interface WorkingImage {
+  /** Encoded file of `image` (used for face detection). */
+  uri: string;
   image: SkImage;
   width: number;
   height: number;
@@ -27,7 +29,7 @@ function keyOf(source: SourceImage, g: Geometry) {
 async function build(source: SourceImage, geometry: Geometry): Promise<WorkingImage> {
   const file = await applyGeometry(source, geometry, PREVIEW_MAX_SIDE, 0.92);
   const image = await loadSkImage(file.uri);
-  return { image, width: image.width(), height: image.height() };
+  return { uri: file.uri, image, width: image.width(), height: image.height() };
 }
 
 export function useWorkingImage(source: SourceImage | null, geometry: Geometry): WorkingImage | null {

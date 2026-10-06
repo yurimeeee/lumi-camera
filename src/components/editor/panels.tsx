@@ -7,17 +7,20 @@ import { IconButton } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
 import { SliderControl } from '@/components/common/SliderControl';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
-import { ADJUST_TOOLS, EFFECT_TOOLS, RETOUCH_TOOLS } from '@/constants/adjustments';
+import { ADJUST_TOOLS, EFFECT_TOOLS, FACE_RETOUCH_KEYS, RETOUCH_TOOLS } from '@/constants/adjustments';
 import { aspectRatioOf, CROP_ASPECTS } from '@/constants/crop';
 import { getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography, WEB_SWITCH } from '@/constants/theme';
+import type { FaceStatus } from '@/hooks/useFaceGeometry';
+import { FACE_DETECTION_SUPPORTED } from '@/services/faceLandmarks';
 import { feedback } from '@/services/feedback';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
 import { useEditorStore } from '@/stores/editorStore';
 import { useIsFavorite, useFilterStore } from '@/stores/filterStore';
-import type { CropAspectId, SourceImage } from '@/types/editing';
+import type { CropAspectId, RetouchKey, SourceImage } from '@/types/editing';
 import type { FilterTab } from '@/types/filters';
 
+import type { Brush } from './EditorCanvas';
 import { ToolSliderPanel } from './ToolSliderPanel';
 
 export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
@@ -107,18 +110,100 @@ export function EffectsPanel() {
   );
 }
 
-export function RetouchPanel() {
+// Face-shape tools need landmarks, which only web can detect for now.
+const RETOUCH_PANEL_TOOLS = FACE_DETECTION_SUPPORTED
+  ? RETOUCH_TOOLS
+  : RETOUCH_TOOLS.filter((t) => !FACE_RETOUCH_KEYS.includes(t.key));
+
+const FACE_NOTE: Record<FaceStatus, string> = {
+  unsupported: '',
+  idle: '얼굴 윤곽을 찾아 자연스럽게 다듬어요.',
+  detecting: '얼굴을 찾는 중이에요…',
+  found: '사진에서 가장 크게 나온 얼굴에 적용돼요.',
+  none: '얼굴을 찾지 못했어요. 정면 얼굴이 잘 보이는 사진에서 써보세요.',
+  error: '얼굴 인식을 불러오지 못했어요. 네트워크 연결을 확인해 주세요.',
+};
+
+export function RetouchPanel({ faceStatus }: { faceStatus: FaceStatus }) {
   const values = useEditorStore((s) => s.present.retouch);
   const { setRetouch, commit, resetRetouch } = useEditorStore.getState();
+  const note = (key: RetouchKey) =>
+    FACE_RETOUCH_KEYS.includes(key)
+      ? FACE_NOTE[faceStatus]
+      : '피부색 영역만 골라 결을 정돈해요. 눈·머리카락·윤곽선은 선명하게 유지돼요.';
   return (
     <ToolSliderPanel
-      tools={RETOUCH_TOOLS}
+      tools={RETOUCH_PANEL_TOOLS}
       values={values}
       onChange={setRetouch}
       onCommit={commit}
       onReset={resetRetouch}
-      note="피부색 영역만 골라 결을 정돈해요. 눈·머리카락·윤곽선은 선명하게 유지돼요."
+      note={note}
     />
+  );
+}
+
+export interface BrushSettings {
+  /** 0…100 */
+  size: number;
+  /** 0…100 */
+  strength: number;
+}
+
+export const DEFAULT_BRUSH: BrushSettings = { size: 35, strength: 35 };
+
+/** Panel sliders → brush: radius 3…15 % of the short side, content follows 4…30 % of the finger. */
+export function toBrush({ size, strength }: BrushSettings): Brush {
+  return { radius: 0.03 + (size / 100) * 0.12, strength: 0.04 + (strength / 100) * 0.26 };
+}
+
+export function ReshapePanel({ brush, onChange }: { brush: BrushSettings; onChange: (b: BrushSettings) => void }) {
+  const strokes = useEditorStore((s) => s.present.reshape.length);
+  const { clearReshape } = useEditorStore.getState();
+  return (
+    <View>
+      <View style={styles.intensityRow}>
+        <Text style={styles.filterName}>크기</Text>
+        <View style={styles.flex}>
+          <SliderControl
+            value={brush.size}
+            min={0}
+            max={100}
+            onChange={(size) => onChange({ ...brush, size })}
+            resetValue={DEFAULT_BRUSH.size}
+            accessibilityLabel="브러시 크기"
+          />
+        </View>
+        <View style={styles.trashSpacer} />
+      </View>
+      <View style={styles.intensityRow}>
+        <Text style={styles.filterName}>강도</Text>
+        <View style={styles.flex}>
+          <SliderControl
+            value={brush.strength}
+            min={0}
+            max={100}
+            onChange={(strength) => onChange({ ...brush, strength })}
+            resetValue={DEFAULT_BRUSH.strength}
+            accessibilityLabel="브러시 강도"
+          />
+        </View>
+        <IconButton
+          icon="trash-outline"
+          size={18}
+          disabled={strokes === 0}
+          color={colors.textSecondary}
+          accessibilityLabel="터치 보정 모두 지우기"
+          onPress={() => {
+            feedback.light();
+            clearReshape();
+          }}
+        />
+      </View>
+      <Text style={styles.reshapeHint}>
+        짧게 여러 번 밀수록 자연스러워요.{'\n'}턱선·볼은 바깥에서 안쪽으로 조금씩 밀어 주세요.
+      </Text>
+    </View>
   );
 }
 
@@ -201,6 +286,16 @@ const styles = StyleSheet.create({
     ...typography.filterName,
     color: colors.text,
     width: 64,
+  },
+  trashSpacer: {
+    width: 44,
+  },
+  reshapeHint: {
+    ...typography.caption,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xl,
+    lineHeight: 18,
   },
   hint: {
     ...typography.caption,

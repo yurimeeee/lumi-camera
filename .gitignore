@@ -42,3 +42,6 @@ yarn-error.*
 
 # Skia web runtime (copied by postinstall)
 public/canvaskit.wasm
+# MediaPipe face landmarker runtime (copied by postinstall)
+public/mediapipe/
+.gstack/

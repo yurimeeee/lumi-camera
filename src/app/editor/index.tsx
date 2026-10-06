@@ -1,6 +1,6 @@
 import { useTypeface } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,9 +10,19 @@ import { PressableScale } from '@/components/common/PressableScale';
 import { CropOverlay } from '@/components/editor/CropOverlay';
 import { EditorCanvas, fitContain } from '@/components/editor/EditorCanvas';
 import { EditorToolbar, type EditorTool } from '@/components/editor/EditorToolbar';
-import { AdjustPanel, CropPanel, EffectsPanel, FilterPanel, RetouchPanel } from '@/components/editor/panels';
+import {
+  AdjustPanel,
+  CropPanel,
+  DEFAULT_BRUSH,
+  EffectsPanel,
+  FilterPanel,
+  ReshapePanel,
+  RetouchPanel,
+  toBrush,
+} from '@/components/editor/panels';
 import { aspectRatioOf } from '@/constants/crop';
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { useFaceGeometry } from '@/hooks/useFaceGeometry';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { useSaveEdit } from '@/hooks/useSaveEdit';
 import { useWorkingImage } from '@/hooks/useWorkingImage';
@@ -30,6 +40,8 @@ export default function EditorScreen() {
   const [tool, setTool] = useState<EditorTool>('filter');
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [before, setBefore] = useState(false);
+  const [brush, setBrush] = useState(DEFAULT_BRUSH);
+  const brushTool = useMemo(() => toBrush(brush), [brush]);
   const pastLength = useEditorStore((s) => s.past.length);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -38,6 +50,9 @@ export default function EditorScreen() {
   const displayGeometry = cropping ? { ...geometry, crop: null } : geometry;
   const working = useWorkingImage(source, displayGeometry);
   const thumbImage = usePreviewImage(source?.uri);
+  // Detect as soon as the retouch panel opens so the face tools respond right away.
+  const faceInUse = useEditorStore((s) => s.present.retouch.eyes > 0 || s.present.retouch.slim > 0);
+  const { face, status: faceStatus } = useFaceGeometry(working?.uri ?? null, faceInUse || tool === 'retouch');
   const typeface = useTypeface(DATE_STAMP_FONT);
   const { save, saving } = useSaveEdit(typeface);
 
@@ -115,11 +130,15 @@ export default function EditorScreen() {
           <View>
             <EditorCanvas
               working={working}
+              source={source}
+              geometry={displayGeometry}
               boxWidth={box.width}
               boxHeight={box.height}
               showOriginal={before}
               onBeforeChange={setBefore}
               typeface={typeface}
+              face={face}
+              brush={tool === 'reshape' ? brushTool : null}
             />
             {cropping && fitted ? (
               <View style={[styles.cropLayer, { width: fitted.width, height: fitted.height, left: (box.width - fitted.width) / 2, top: (box.height - fitted.height) / 2 }]}>
@@ -154,7 +173,8 @@ export default function EditorScreen() {
         <Animated.View key={tool} entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)} style={styles.panelBody}>
           {tool === 'filter' ? <FilterPanel thumbImage={thumbImage} /> : null}
           {tool === 'adjust' ? <AdjustPanel /> : null}
-          {tool === 'retouch' ? <RetouchPanel /> : null}
+          {tool === 'retouch' ? <RetouchPanel faceStatus={faceStatus} /> : null}
+          {tool === 'reshape' ? <ReshapePanel brush={brush} onChange={setBrush} /> : null}
           {tool === 'crop' ? <CropPanel source={source} /> : null}
           {tool === 'effects' ? <EffectsPanel /> : null}
         </Animated.View>

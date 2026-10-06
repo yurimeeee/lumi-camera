@@ -16,7 +16,8 @@ interface Props<K extends string> {
   onReset: (key: K) => void;
   /** Optional row rendered under the tools (e.g. a toggle). */
   footer?: ReactNode;
-  note?: string;
+  /** Hint under the tools; may depend on the selected tool. */
+  note?: string | ((key: K) => string | undefined);
 }
 
 /** Icon strip of tools + one slider for the selected tool, with per-tool reset. */
@@ -24,6 +25,7 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
   const [active, setActive] = useState<K>(tools[0]!.key);
   const spec = tools.find((t) => t.key === active) ?? tools[0]!;
   const value = values[spec.key];
+  const hint = typeof note === 'function' ? note(spec.key) : note;
 
   return (
     <View>
@@ -80,7 +82,7 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
           );
         })}
       </ScrollView>
-      {note ? <Text style={styles.note}>{note}</Text> : null}
+      {hint ? <Text style={styles.note}>{hint}</Text> : null}
       {footer}
     </View>
   );

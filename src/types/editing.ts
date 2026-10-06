@@ -21,7 +21,7 @@ export type AdjustmentKey =
   | 'vignette'
   | 'grain';
 
-export type RetouchKey = 'skin' | 'smooth' | 'tone' | 'glow' | 'detail';
+export type RetouchKey = 'skin' | 'smooth' | 'tone' | 'glow' | 'detail' | 'eyes' | 'slim';
 
 /** Every scalar the processing pipeline understands. */
 export type ToneKey = AdjustmentKey | RetouchKey;
@@ -68,7 +68,23 @@ export interface EditState {
   adjustments: Adjustments;
   retouch: Retouch;
   geometry: Geometry;
+  /** 터치 보정 strokes, in drawing order. */
+  reshape: readonly ReshapeStroke[];
   dateStamp: boolean;
+}
+
+/**
+ * One 터치 보정 drag: the content under the brush is pushed along `points`.
+ * Points are normalised against the *source* image (before rotate/flip/crop)
+ * so strokes stay put when the geometry changes afterwards.
+ */
+export interface ReshapeStroke {
+  id: number;
+  /** Brush radius as a fraction of the source image's short side. */
+  radius: number;
+  /** Share of the finger's travel the content follows (0…1). */
+  strength: number;
+  points: readonly NormalizedPoint[];
 }
 
 export interface SourceImage {
@@ -81,4 +97,28 @@ export interface SourceImage {
   takenAt: number;
   /** Position recorded at capture when "위치 정보 저장" is on. */
   location?: { latitude: number; longitude: number; altitude: number | null } | null;
+}
+
+/** A point normalised to 0…1 against the image's width and height. */
+export interface NormalizedPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Face landmarks needed by the face-shape warp, normalised against the image
+ * the face was detected in. Lengths are fractions of the image width, so the
+ * same geometry drives the preview and the full-resolution export.
+ */
+export interface FaceGeometry {
+  /** Eye centres (image-left eye first). */
+  eyes: readonly [NormalizedPoint, NormalizedPoint];
+  /** Eye opening width, per eye. */
+  eyeWidths: readonly [number, number];
+  /** Lower jaw points pulled inward by 얼굴 갸름 (image-left side first). */
+  jaw: readonly NormalizedPoint[];
+  /** Forehead → chin, along the face's midline (gives the inward direction). */
+  axis: readonly [NormalizedPoint, NormalizedPoint];
+  /** Cheek-to-cheek width. */
+  width: number;
 }

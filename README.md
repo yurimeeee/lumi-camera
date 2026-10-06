@@ -10,7 +10,7 @@ VSCO보다 쉽고 기본 카메라보다 감성적인, warm · soft · film 톤�
 | 카메라 | 실시간 프리뷰, 촬영, 전/후면 전환, 플래시(Auto/On/Off), 타이머(3·5·10초 카운트다운), 3×3 격자, 촬영 비율(Full/1:1/4:3/16:9), 피부 보정 강도, 필터 캐러셀(카테고리·즐겨찾기 탭), 셔터 블링크 + 햅틱 |
 | 필터 | 20종(Original, Warm 5, Cool 3, Film 5, Soft 3, B&W 3), 카테고리별 보기, 상세 화면, 즐겨찾기(AsyncStorage 저장) |
 | 앨범 | 최근 사진 그리드(페이지네이션), 제한된 접근(iOS limited) 안내 및 추가 선택, 권한 없이도 시스템 사진 선택기로 편집 가능 |
-| 편집 | 필터 + 강도, 조정 12종, 보정(리터치) 5종, 효과 3종 + 날짜 스탬프, 자르기(Free/Original/1:1/4:3/3:4/16:9/9:16, 드래그·코너 리사이즈), 90° 회전, 좌우/상하 반전, Before/After(길게 누르기 또는 버튼), Undo/Redo(최대 40단계), 개별/전체 초기화 |
+| 편집 | 필터 + 강도, 조정 12종, 보정(리터치) 5종 + 얼굴 형태 2종(눈 크게·얼굴 갸름, 웹), 터치 보정(브러시 크기 선택 후 드래그로 밀기), 효과 3종 + 날짜 스탬프, 자르기(Free/Original/1:1/4:3/3:4/16:9/9:16, 드래그·코너 리사이즈), 90° 회전, 좌우/상하 반전, Before/After(길게 누르기 또는 버튼), Undo/Redo(최대 40단계), 개별/전체 초기화 |
 | 저장 | 전체 해상도로 오프스크린 렌더링 → JPEG(고화질 95% / 표준 85%) → EXIF(촬영 시각, 선택 시 GPS) → 사진 보관함 ‘Lumi’ 앨범. 원본 함께 저장 시 ‘Lumi Originals’에 별도 저장 |
 | 설정 | 무음 모드, 격자, 타이머, 거울 모드, 위치 정보 저장, 촬영 날짜 표시 + 형식 4종, 원본 함께 저장, 고화질 저장, 기본 필터·강도·촬영 비율 (Zustand + AsyncStorage) |
 
@@ -114,7 +114,7 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 
 1. **합성** (`services/imageProcessing.ts`): `필터 params × 강도 + 사용자 조정 + 리터치`를 같은 -100…100 공간에서 선형 합성 → 셰이더 uniform으로 정규화. UI와 무관한 순수 함수입니다.
 2. **기하** (`services/imagePipeline.ts`): 회전 → 반전 → 자르기 → 리사이즈를 expo-image-manipulator(네이티브)로 처리. 편집 프리뷰는 최대 1600px, 저장은 4096px(고화질) / 2048px.
-3. **색/질감** (`shaders/lumiShader.ts`): 하나의 SkSL 셰이더에서 리터치 → 선명도/정의 → 노출/밝기 → 화이트밸런스(색온도·색조·따뜻함) → 하이라이트/그림자 → 대비 → 채도/생동감 → 스플릿 톤 → 광채 → 페이드 → 비네팅 → 그레인 순으로 처리.
+3. **색/질감** (`shaders/lumiShader.ts`): 하나의 SkSL 셰이더에서 터치 보정 변위 → 얼굴 워프 → 리터치 → 선명도/정의 → 노출/밝기 → 화이트밸런스(색온도·색조·따뜻함) → 하이라이트/그림자 → 대비 → 채도/생동감 → 스플릿 톤 → 광채 → 페이드 → 비네팅 → 그레인 순으로 처리.
    반경은 이미지 짧은 변의 1/1000 단위라 화면 프리뷰와 저장본이 같은 결과를 냅니다.
 4. **내보내기** (`services/exportImage.tsx`): 오프스크린 렌더 + 날짜 스탬프 → JPEG → EXIF → 저장.
 
@@ -124,10 +124,20 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 
 - **카메라 실시간 필터**: expo-camera는 프레임을 JS/Skia로 넘기지 않습니다. 프리뷰에서는 필터별 `preview` 레이어를 RN `mixBlendMode`(soft-light, saturation 등)로 겹쳐 분위기를 근사하고, **촬영된 사진에는 Skia 파이프라인 전체가 정확히 적용**됩니다. 프레임 단위 실시간 필터가 필요하면 react-native-vision-camera + Skia Frame Processor(Development Build 필요)로 확장할 수 있습니다.
 - **무음 모드**: iOS 셔터음은 기기·지역 정책(예: 한국·일본)상 강제되는 경우가 있습니다. expo-camera의 `shutterSound: false`는 iOS에서 시스템 사운드를 dispose하는 우회 방식이라 **사용하지 않습니다**. 무음 모드는 Lumi 자체 효과음만 끄며(`services/feedback.ts`), 시스템 셔터음은 OS 정책을 따릅니다.
-- **피부 보정**: 얼굴/피부 segmentation 대신 **YCbCr 피부색 범위 마스크 + 엣지 보존(bilateral) 평균**을 사용합니다. 피부색 영역만 부드럽게 하고 눈·머리카락·윤곽은 유지합니다. 얼굴 형태 변형은 구현하지 않았습니다. 2차로 Vision/ML Kit 기반 segmentation 마스크를 셰이더의 `skinMask` 대신 넣을 수 있게 분리되어 있습니다.
+- **피부 보정**: 얼굴/피부 segmentation 대신 **YCbCr 피부색 범위 마스크 + 엣지 보존(bilateral) 평균**을 사용합니다. 피부색 영역만 부드럽게 하고 눈·머리카락·윤곽은 유지합니다. 2차로 Vision/ML Kit 기반 segmentation 마스크를 셰이더의 `skinMask` 대신 넣을 수 있게 분리되어 있습니다.
 - **비율 촬영**: iOS 센서는 4:3이므로 1:1·16:9는 촬영 후 중앙 크롭하고, 프리뷰는 잘릴 영역을 어둡게 표시합니다.
 - **EXIF**: Skia 인코더는 메타데이터를 쓰지 않아 piexifjs로 촬영 시각과 (선택 시) GPS를 다시 기록합니다.
 - **Skia `ImageShader` 샘플링**: Skia 2.6의 `<ImageShader>`는 cubic이 아닌 sampling 옵션을 `makeShaderCubic`로 잘못 넘깁니다. 그래서 Mitchell cubic 샘플링을 명시적으로 사용합니다.
+
+## 터치 보정
+
+`터치` 탭에서 브러시 크기와 강도를 고르고 사진을 드래그하면 브러시 안쪽이 밀립니다(liquify의 push). 플랫폼 제약이 없어 네이티브에서도 동작합니다.
+
+- 보정 앱처럼 조금씩 다듬도록 만들었습니다. 내용은 손가락 이동의 4~30%만 따라옵니다(강도, 기본 약 13%). 한 획이 밀 수 있는 거리는 브러시 반경의 22%까지이고, 이 상한에 가까워질수록 점점 덜 밀립니다. 감쇠는 3차 곡선 `(1 − t²)³`이라 브러시 가장자리 주변이 덜 일그러집니다.
+
+- 획은 **원본 사진 좌표**로 저장됩니다(`EditState.reshape`). 회전·반전·자르기를 나중에 해도 같은 위치에 남고, Undo는 획 단위입니다.
+- 획은 화면에 보이는 프레임 위의 변위 필드(긴 변 320칸 격자, `services/reshape.ts`)로 재생됩니다. 작은 단계로 나눠 `d'(p) = d(p − m·w) − m·w`로 누적해 접히지 않습니다. 드래그 중에는 새 구간만 더합니다(`hooks/useReshapeField.ts`).
+- 필드는 축마다 16비트(R = 상위 바이트, G = 하위 바이트) RGBA8 텍스처 2장으로 셰이더에 들어갑니다. 해상도와 무관해서 미리보기와 저장본이 같은 결과를 냅니다. B-spline으로 샘플링해 바이트 쌍이 오버슈트하지 않습니다.
 
 ## Web 지원 범위
 
@@ -137,12 +147,16 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 - 앨범: 사진 보관함 API가 없어 파일 선택기로 대체합니다. 저장하면 JPEG 파일을 다운로드합니다.
 - 오프스크린 렌더는 CPU raster surface를 씁니다. 브라우저의 WebGL 컨텍스트 개수 제한 때문입니다. 대용량 저장은 네이티브보다 느립니다.
 - 위치·햅틱은 동작하지 않습니다.
+- **눈 크게 / 얼굴 갸름(웹 전용)**: MediaPipe Face Landmarker로 얼굴 랜드마크를 찾고, 셰이더 맨 앞에서 샘플링 좌표를 옮깁니다. 눈은 원형 bulge를 쓰고, 턱은 아래 턱선 6점을 얼굴 축에 수직 방향(안쪽)으로 local translation warp합니다. 변위를 합산해 접힘을 막습니다. 사진에서 가장 크게 나온 얼굴 하나에만 적용됩니다.
+  - MediaPipe JS·WASM은 postinstall(`scripts/setup-mediapipe.js`)이 `public/mediapipe/`에 복사합니다. 번들 안의 동적 `import(url)`을 Metro가 변환하지 못해, Metro를 거치지 않고 브라우저가 직접 import합니다. 모델(`face_landmarker.task`, 약 3.6MB)은 처음 쓸 때 Google 모델 저장소에서 받습니다.
+  - 이미지 입력에 WebGL이 필요합니다. 일반 브라우저에는 있지만 WebGL이 없는 헤드리스 브라우저에서는 ‘얼굴 인식을 불러오지 못했어요’가 표시됩니다.
+  - 네이티브는 랜드마크 검출을 연결하지 않아 두 슬라이더를 숨깁니다(`services/faceLandmarks.ts`). Vision / ML Kit(Development Build)으로 `FaceGeometry`만 채우면 셰이더는 그대로 씁니다.
 - `index.web.ts`는 CanvasKit을 먼저 로드하고, React 19 개발 모드 성능 트랙이 WASM 힙을 순회하며 멈추는 문제를 막기 위해 힙 뷰를 non-enumerable로 바꿉니다.
 
 ## 향후 개선
 
 - vision-camera + Skia Frame Processor 기반의 프레임 단위 실시간 필터 (Development Build)
-- 얼굴·피부 segmentation 마스크 (Vision / ML Kit)
+- 얼굴·피부 segmentation 마스크, 네이티브 얼굴 랜드마크(눈 크게·얼굴 갸름) (Vision / ML Kit)
 - 앨범 다중 선택 후 일괄 편집, 프리셋 복사·붙여넣기
 - 크롭 화면 핀치 줌, 자유 각도 회전(수평 맞추기)
 - VIDEO 모드, Live Photo

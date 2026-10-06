@@ -4,6 +4,7 @@
   "main": "index",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/react-native-skia": "2.6.2",
     "expo": "~57.0.26",
@@ -49,7 +50,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "doctor": "npx expo-doctor",
-    "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js"
+    "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js"
   },
   "private": true
 }

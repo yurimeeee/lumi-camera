@@ -11,8 +11,10 @@ import type { DateFormat } from '@/types/settings';
 import { formatDateStamp } from '@/utils/dateStamp';
 
 import { withExif } from './exif';
+import { detectFace } from './faceLandmarks';
 import { applyGeometry, EXPORT_MAX_SIDE_HQ, EXPORT_MAX_SIDE_STD, type ImageFile } from './imagePipeline';
 import { buildUniforms, isIdentity, resolveProcessing } from './imageProcessing';
+import { buildReshapeField } from './reshape';
 import type { GeoPoint } from './location';
 
 export interface ExportOptions {
@@ -65,13 +67,20 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
     adjustments: edit.adjustments,
     retouch: edit.retouch,
   });
-  const uniforms = isIdentity(processing) ? null : buildUniforms(processing, width, height);
+  // Landmarks are re-detected on the export image: its geometry can differ
+  // from the preview's (e.g. saving while the crop tool shows the full frame).
+  const reshapes = edit.retouch.eyes > 0 || edit.retouch.slim > 0;
+  const face = reshapes ? await detectFace(base.uri).catch(() => null) : null;
+  const reshape = edit.reshape.length
+    ? buildReshapeField(edit.reshape, edit.geometry, source.width, source.height).toTextures()
+    : null;
+  const uniforms = isIdentity(processing) && !reshape ? null : buildUniforms(processing, width, height, face);
   const stamp =
     edit.dateStamp && opts.stampTypeface ? formatDateStamp(source.takenAt, opts.dateFormat) : null;
 
   const rendered = await renderOffscreen(
     <Group>
-      <LumiLayer image={image} width={width} height={height} uniforms={uniforms} />
+      <LumiLayer image={image} width={width} height={height} uniforms={uniforms} reshape={reshape} />
       {stamp && opts.stampTypeface ? (
         <DateStampLayer text={stamp} typeface={opts.stampTypeface} width={width} height={height} />
       ) : null}
@@ -79,6 +88,8 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
     width,
     height,
   );
+  reshape?.x.dispose();
+  reshape?.y.dispose();
   if (!rendered) throw new Error('사진을 렌더링하지 못했어요.');
 
   const raster = rendered.makeNonTextureImage() ?? rendered;

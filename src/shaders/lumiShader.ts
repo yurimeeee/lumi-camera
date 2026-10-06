@@ -1,10 +1,12 @@
 import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
 
+import { RESHAPE_RANGE } from '@/services/reshape';
+
 /**
  * Lumi's single-pass image pipeline, written in SkSL.
  *
  * Order of operations:
- *   retouch (skin-tone masked) → local detail → exposure/brightness →
+ *   face warp → retouch (skin-tone masked) → local detail → exposure/brightness →
  *   white balance → highlights/shadows → contrast → saturation/vibrance →
  *   split tone → glow → fade → vignette → grain
  *
@@ -14,9 +16,20 @@ import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
  * Retouch note: skin areas are detected with a YCbCr colour-range mask, not
  * semantic face segmentation. Smoothing is an edge-preserving (bilateral)
  * average restricted to that mask, so edges, eyes and hair are kept sharp.
+ *
+ * Face warp: with face landmarks, the sampling position is displaced before
+ * anything else reads the image — a radial bulge around each eye (눈 크게)
+ * and local translation warps pushing the lower jaw toward the face's midline
+ * (얼굴 갸름). Before that, the 터치 보정 displacement field (two 16-bit
+ * encoded textures, see services/reshape.ts) is applied, since strokes are
+ * drawn on what the user sees. Vignette and grain use the unwarped position.
  */
 export const LUMI_SKSL = `
 uniform shader image;
+// 터치 보정 displacement, x and y: R = high byte, G = low byte of 0…1.
+uniform shader dispX;
+uniform shader dispY;
+uniform float uReshape;
 uniform float2 uResolution;
 uniform float uPixel;
 
@@ -42,6 +55,19 @@ uniform float uSmooth;
 uniform float uTone;
 uniform float uGlow;
 uniform float uDetail;
+
+uniform float uEyes;
+uniform float3 uEyeL;
+uniform float3 uEyeR;
+uniform float uSlim;
+uniform float uFaceWidth;
+// Jaw points: xy = position, zw = inward direction × weight.
+uniform float4 uJaw0;
+uniform float4 uJaw1;
+uniform float4 uJaw2;
+uniform float4 uJaw3;
+uniform float4 uJaw4;
+uniform float4 uJaw5;
 
 uniform float3 uShadowTint;
 uniform float3 uHighlightTint;
@@ -93,7 +119,58 @@ float3 ringBlur(float2 xy, float radius) {
   return sum / 8.0;
 }
 
-half4 main(float2 xy) {
+// Magnifies the disc eye.xy/eye.z; continuous (no seam) at its rim.
+float2 bulge(float2 p, float3 eye, float s) {
+  float2 d = p - eye.xy;
+  float r2 = eye.z * eye.z;
+  float d2 = dot(d, d);
+  if (d2 >= r2) return p;
+  return eye.xy + d * (1.0 - s * (1.0 - d2 / r2));
+}
+
+// Local translation warp (Gustafsson): offset that moves the content at a by
+// m, fading out at radius r. Fold-free while the summed |m| stays well below r.
+float2 pullOffset(float2 p, float2 a, float2 m, float r) {
+  float2 d = p - a;
+  float r2 = r * r;
+  float d2 = dot(d, d);
+  if (d2 >= r2) return float2(0.0);
+  float k = (r2 - d2) / (r2 - d2 + dot(m, m));
+  return m * k * k;
+}
+
+float2 slimOffset(float2 p, float4 jaw, float amount, float r) {
+  return pullOffset(p, jaw.xy, jaw.zw * amount, r);
+}
+
+float2 faceWarp(float2 p) {
+  if (uSlim > 0.0 && uFaceWidth > 0.0) {
+    // Offsets are summed (not chained) so overlapping pulls can't fold.
+    float r = uFaceWidth * 0.2;
+    float amount = uFaceWidth * 0.03 * uSlim;
+    float2 off = slimOffset(p, uJaw0, amount, r) + slimOffset(p, uJaw1, amount, r)
+               + slimOffset(p, uJaw2, amount, r) + slimOffset(p, uJaw3, amount, r)
+               + slimOffset(p, uJaw4, amount, r) + slimOffset(p, uJaw5, amount, r);
+    p -= off;
+  }
+  if (uEyes > 0.0 && uEyeL.z > 0.0) {
+    p = bulge(p, uEyeL, uEyes * 0.3);
+    p = bulge(p, uEyeR, uEyes * 0.3);
+  }
+  return p;
+}
+
+float decode16(half4 c) {
+  return (float(c.r) * 65280.0 + float(c.g) * 255.0) / 65535.0;
+}
+
+float2 reshape(float2 p) {
+  float2 v = float2(decode16(dispX.eval(p)), decode16(dispY.eval(p)));
+  return p + (v - 0.5) * ${(RESHAPE_RANGE * 2).toFixed(4)} * uResolution;
+}
+
+half4 main(float2 pos) {
+  float2 xy = faceWarp(uReshape > 0.5 ? reshape(pos) : pos);
   float3 src = image.eval(xy).rgb;
   float3 c = src;
   float px = uPixel;
@@ -180,7 +257,7 @@ half4 main(float2 xy) {
 
   if (uVignette != 0.0) {
     float m = max(uResolution.x, uResolution.y);
-    float2 d = (xy / uResolution - 0.5) * 2.0 * (uResolution / m);
+    float2 d = (pos / uResolution - 0.5) * 2.0 * (uResolution / m);
     float v = smoothstep(0.35, 1.25, length(d));
     if (uVignette > 0.0) {
       c *= 1.0 - v * uVignette * 0.65;
@@ -190,7 +267,7 @@ half4 main(float2 xy) {
   }
 
   if (uGrain > 0.0) {
-    float2 cell = floor(xy / max(px * 1.1, 0.35));
+    float2 cell = floor(pos / max(px * 1.1, 0.35));
     float n = hash12(cell + uGrainSeed) + hash12(cell * 1.37 + uGrainSeed + 17.0) - 1.0;
     l = clamp(luma(c), 0.0, 1.0);
     c += n * uGrain * 0.16 * (0.4 + 2.4 * l * (1.0 - l));

@@ -9,12 +9,16 @@ import type {
   CropAspectId,
   EditState,
   Geometry,
+  NormalizedPoint,
   NormalizedRect,
+  ReshapeStroke,
   RetouchKey,
   SourceImage,
 } from '@/types/editing';
 
 export const HISTORY_LIMIT = 40;
+
+let nextStrokeId = 1;
 
 export const DEFAULT_GEOMETRY: Geometry = {
   rotation: 0,
@@ -31,6 +35,7 @@ export function createEditState(partial?: Partial<EditState>): EditState {
     adjustments: { ...DEFAULT_ADJUSTMENTS },
     retouch: { ...DEFAULT_RETOUCH },
     geometry: { ...DEFAULT_GEOMETRY },
+    reshape: [],
     dateStamp: false,
     ...partial,
   };
@@ -54,6 +59,11 @@ interface EditorActions {
   setAdjustment: (key: AdjustmentKey, value: number) => void;
   setRetouch: (key: RetouchKey, value: number) => void;
   commit: () => void;
+
+  /** 터치 보정: live while dragging; `commit()` on release (one undo step per stroke). */
+  beginStroke: (point: NormalizedPoint, radius: number, strength: number) => void;
+  extendStroke: (point: NormalizedPoint) => void;
+  clearReshape: () => void;
 
   /** Discrete updates — committed immediately. */
   setFilter: (id: string) => void;
@@ -108,6 +118,23 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     setRetouch: (key, value) =>
       set((s) => ({ present: { ...s.present, retouch: { ...s.present.retouch, [key]: value } } })),
     commit: () => commitState(get().present),
+
+    beginStroke: (point, radius, strength) =>
+      set((s) => ({
+        present: { ...s.present, reshape: [...s.present.reshape, { id: nextStrokeId++, radius, strength, points: [point] }] },
+      })),
+    extendStroke: (point) =>
+      set((s) => {
+        const strokes = s.present.reshape;
+        const last = strokes[strokes.length - 1];
+        if (!last) return s;
+        const stroke: ReshapeStroke = { ...last, points: [...last.points, point] };
+        return { present: { ...s.present, reshape: [...strokes.slice(0, -1), stroke] } };
+      }),
+    clearReshape: () => {
+      if (get().present.reshape.length === 0) return;
+      update((s) => ({ ...s, reshape: [] }));
+    },
 
     setFilter: (filterId) => {
       if (get().present.filterId === filterId) return;
