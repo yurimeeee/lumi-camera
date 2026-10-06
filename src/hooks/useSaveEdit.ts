@@ -1,6 +1,5 @@
 import type { SkTypeface } from '@shopify/react-native-skia';
 import { useCallback, useState } from 'react';
-import { Alert, Linking } from 'react-native';
 
 import { prepareOriginal, renderEdit } from '@/services/exportImage';
 import { feedback } from '@/services/feedback';
@@ -9,12 +8,10 @@ import { useCameraStore } from '@/stores/cameraStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { showToast } from '@/stores/toastStore';
+import { permissionDenied } from '@/utils/dialogs';
 
 function permissionAlert() {
-  Alert.alert('사진 저장 권한이 필요해요', '편집한 사진을 보관함에 저장하려면 설정에서 사진 접근을 허용해 주세요.', [
-    { text: '취소', style: 'cancel' },
-    { text: '설정 열기', onPress: () => void Linking.openSettings() },
-  ]);
+  permissionDenied('사진 저장 권한이 필요해요', '편집한 사진을 보관함에 저장하려면 설정에서 사진 접근을 허용해 주세요.');
 }
 
 /** Render at export resolution and save (plus the original, when enabled). */

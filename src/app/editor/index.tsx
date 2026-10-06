@@ -1,7 +1,7 @@
 import { useTypeface } from '@shopify/react-native-skia';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,6 +28,7 @@ import { useSaveEdit } from '@/hooks/useSaveEdit';
 import { useWorkingImage } from '@/hooks/useWorkingImage';
 import { DATE_STAMP_FONT } from '@/render/DateStampLayer';
 import { useCanRedo, useCanUndo, useEditorStore } from '@/stores/editorStore';
+import { confirmAction } from '@/utils/dialogs';
 
 export default function EditorScreen() {
   const insets = useSafeAreaInsets();
@@ -68,10 +69,14 @@ export default function EditorScreen() {
       else router.replace('/');
     };
     if (canUndo && savedAt !== pastLength) {
-      Alert.alert('편집을 그만할까요?', '저장하지 않은 편집 내용은 사라져요.', [
-        { text: '계속 편집', style: 'cancel' },
-        { text: '나가기', style: 'destructive', onPress: done },
-      ]);
+      confirmAction({
+        title: '편집을 그만할까요?',
+        message: '저장하지 않은 편집 내용은 사라져요.',
+        cancelText: '계속 편집',
+        confirmText: '나가기',
+        destructive: true,
+        onConfirm: done,
+      });
     } else {
       done();
     }
@@ -107,10 +112,7 @@ export default function EditorScreen() {
             accessibilityLabel="모든 편집 초기화"
             disabled={!canUndo}
             onPress={() =>
-              Alert.alert('모든 편집을 초기화할까요?', undefined, [
-                { text: '취소', style: 'cancel' },
-                { text: '초기화', style: 'destructive', onPress: resetAll },
-              ])
+              confirmAction({ title: '모든 편집을 초기화할까요?', confirmText: '초기화', destructive: true, onConfirm: resetAll })
             }
           />
         </View>

@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Header } from '@/components/common/Header';
@@ -16,6 +16,7 @@ import { requestLocationAccess } from '@/services/location';
 import { useCameraStore } from '@/stores/cameraStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DATE_FORMATS, formatDateStamp } from '@/utils/dateStamp';
+import { permissionDenied } from '@/utils/dialogs';
 
 type Sheet = 'timer' | 'dateFormat' | 'filter' | 'ratio' | 'intensity' | null;
 
@@ -32,14 +33,7 @@ export default function SettingsScreen() {
     if (!next) return s.set('saveLocation', false);
     const access = await requestLocationAccess();
     if (access === 'granted') return s.set('saveLocation', true);
-    Alert.alert(
-      '위치 권한이 필요해요',
-      '사진에 촬영 위치를 기록하려면 설정에서 위치 접근을 허용해 주세요.',
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '설정 열기', onPress: () => void Linking.openSettings() },
-      ],
-    );
+    permissionDenied('위치 권한이 필요해요', '사진에 촬영 위치를 기록하려면 설정에서 위치 접근을 허용해 주세요.');
   };
 
   const [now] = useState(() => Date.now());
