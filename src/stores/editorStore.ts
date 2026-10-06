@@ -65,6 +65,8 @@ interface EditorActions {
   /** 터치 보정: live while dragging; `commit()` on release (one undo step per stroke). */
   beginStroke: (point: NormalizedPoint, radius: number, strength: number) => void;
   extendStroke: (point: NormalizedPoint) => void;
+  /** Drops the live (uncommitted) stroke, e.g. when a second finger starts a pinch. */
+  cancelStroke: () => void;
   clearReshape: () => void;
   /** 잡티 제거: one undo step per tap. */
   addSpot: (spot: Omit<BlemishSpot, 'id'>) => void;
@@ -141,6 +143,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       if (get().present.spots.length === 0) return;
       update((s) => ({ ...s, spots: [] }));
     },
+    cancelStroke: () => set((s) => (s.present === s.committed ? s : { present: s.committed })),
     clearReshape: () => {
       if (get().present.reshape.length === 0) return;
       update((s) => ({ ...s, reshape: [] }));

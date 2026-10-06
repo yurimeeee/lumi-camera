@@ -141,6 +141,7 @@ export default function EditorScreen() {
               typeface={typeface}
               face={face}
               brush={tool === 'reshape' ? brushTool : null}
+              zoomEnabled={!cropping}
             />
             {cropping && fitted ? (
               <View style={[styles.cropLayer, { width: fitted.width, height: fitted.height, left: (box.width - fitted.width) / 2, top: (box.height - fitted.height) / 2 }]}>
