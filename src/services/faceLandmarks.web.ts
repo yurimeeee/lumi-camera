@@ -24,9 +24,6 @@ const EYE_L = { outer: 33, inner: 133, upper: 159, lower: 145 };
 const EYE_R = { outer: 263, inner: 362, upper: 386, lower: 374 };
 const CHEEK_L = 234;
 const CHEEK_R = 454;
-/** Lower jaw contour, top to bottom per side (matches uJaw0…5). */
-const JAW = [58, 172, 136, 288, 397, 365];
-const FOREHEAD = 10;
 const CHIN = 152;
 
 let landmarker: Promise<FaceLandmarker> | null = null;
@@ -98,8 +95,7 @@ function toGeometry(mesh: NormalizedLandmark[], aspect: number): FaceGeometry {
   return {
     eyes: [centre(EYE_L), centre(EYE_R)],
     eyeWidths: [dist(EYE_L.outer, EYE_L.inner), dist(EYE_R.outer, EYE_R.inner)],
-    jaw: JAW.map(p),
-    axis: [p(FOREHEAD), p(CHIN)],
+    chin: p(CHIN),
     width: dist(CHEEK_L, CHEEK_R),
   };
 }

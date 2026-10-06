@@ -19,7 +19,7 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  *
  * Face warp: with face landmarks, the sampling position is displaced before
  * anything else reads the image — a radial bulge around each eye (눈 크게)
- * and local translation warps pushing the lower jaw toward the face's midline
+ * and a smooth horizontal squeeze of the lower face toward its midline
  * (얼굴 갸름). Before that, the 터치 보정 displacement field (two 16-bit
  * encoded textures, see services/reshape.ts) is applied, since strokes are
  * drawn on what the user sees. Vignette and grain use the unwarped position.
@@ -60,14 +60,11 @@ uniform float uEyes;
 uniform float3 uEyeL;
 uniform float3 uEyeR;
 uniform float uSlim;
-uniform float uFaceWidth;
-// Jaw points: xy = position, zw = inward direction × weight.
-uniform float4 uJaw0;
-uniform float4 uJaw1;
-uniform float4 uJaw2;
-uniform float4 uJaw3;
-uniform float4 uJaw4;
-uniform float4 uJaw5;
+// Face frame: origin between the eyes, unit vector toward the chin.
+uniform float2 uFaceOrigin;
+uniform float2 uFaceDown;
+uniform float uFaceHalfWidth;
+uniform float uFaceLength;
 
 uniform float3 uShadowTint;
 uniform float3 uHighlightTint;
@@ -128,30 +125,27 @@ float2 bulge(float2 p, float3 eye, float s) {
   return eye.xy + d * (1.0 - s * (1.0 - d2 / r2));
 }
 
-// Local translation warp (Gustafsson): offset that moves the content at a by
-// m, fading out at radius r. Fold-free while the summed |m| stays well below r.
-float2 pullOffset(float2 p, float2 a, float2 m, float r) {
-  float2 d = p - a;
-  float r2 = r * r;
-  float d2 = dot(d, d);
-  if (d2 >= r2) return float2(0.0);
-  float k = (r2 - d2) / (r2 - d2 + dot(m, m));
-  return m * k * k;
-}
-
-float2 slimOffset(float2 p, float4 jaw, float amount, float r) {
-  return pullOffset(p, jaw.xy, jaw.zw * amount, r);
+// 얼굴 갸름: squeezes the lower face toward its midline. In face units
+// (s across, 1 = cheekbone; t down, 0 = eyes, 1 = chin) content is sampled
+// from s·(1 + k), so the contour moves in while the nose and mouth near the
+// midline barely move. k fades in below the cheekbones, peaks along the jaw,
+// fades out under the chin and outside the face, so nothing creases. The
+// mapping stays monotonic (no folds) for k well under 0.3.
+float2 slim(float2 p) {
+  float2 down = uFaceDown;
+  float2 across = float2(-down.y, down.x);
+  float2 d = p - uFaceOrigin;
+  float s = dot(d, across) / uFaceHalfWidth;
+  float t = dot(d, down) / uFaceLength;
+  float wt = smoothstep(0.15, 0.7, t) * (1.0 - smoothstep(1.0, 1.4, t));
+  float ws = 1.0 - smoothstep(0.95, 1.75, abs(s));
+  float k = uSlim * 0.1 * wt * ws;
+  return p + across * (s * k * uFaceHalfWidth);
 }
 
 float2 faceWarp(float2 p) {
-  if (uSlim > 0.0 && uFaceWidth > 0.0) {
-    // Offsets are summed (not chained) so overlapping pulls can't fold.
-    float r = uFaceWidth * 0.2;
-    float amount = uFaceWidth * 0.03 * uSlim;
-    float2 off = slimOffset(p, uJaw0, amount, r) + slimOffset(p, uJaw1, amount, r)
-               + slimOffset(p, uJaw2, amount, r) + slimOffset(p, uJaw3, amount, r)
-               + slimOffset(p, uJaw4, amount, r) + slimOffset(p, uJaw5, amount, r);
-    p -= off;
+  if (uSlim > 0.0 && uFaceHalfWidth > 0.0) {
+    p = slim(p);
   }
   if (uEyes > 0.0 && uEyeL.z > 0.0) {
     p = bulge(p, uEyeL, uEyes * 0.3);

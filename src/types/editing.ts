@@ -115,10 +115,8 @@ export interface FaceGeometry {
   eyes: readonly [NormalizedPoint, NormalizedPoint];
   /** Eye opening width, per eye. */
   eyeWidths: readonly [number, number];
-  /** Lower jaw points pulled inward by 얼굴 갸름 (image-left side first). */
-  jaw: readonly NormalizedPoint[];
-  /** Forehead → chin, along the face's midline (gives the inward direction). */
-  axis: readonly [NormalizedPoint, NormalizedPoint];
+  /** Chin tip; with the eye midpoint it spans the face's vertical axis. */
+  chin: NormalizedPoint;
   /** Cheek-to-cheek width. */
   width: number;
 }

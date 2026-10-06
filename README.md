@@ -147,7 +147,7 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 - 앨범: 사진 보관함 API가 없어 파일 선택기로 대체합니다. 저장하면 JPEG 파일을 다운로드합니다.
 - 오프스크린 렌더는 CPU raster surface를 씁니다. 브라우저의 WebGL 컨텍스트 개수 제한 때문입니다. 대용량 저장은 네이티브보다 느립니다.
 - 위치·햅틱은 동작하지 않습니다.
-- **눈 크게 / 얼굴 갸름(웹 전용)**: MediaPipe Face Landmarker로 얼굴 랜드마크를 찾고, 셰이더 맨 앞에서 샘플링 좌표를 옮깁니다. 눈은 원형 bulge를 쓰고, 턱은 아래 턱선 6점을 얼굴 축에 수직 방향(안쪽)으로 local translation warp합니다. 변위를 합산해 접힘을 막습니다. 사진에서 가장 크게 나온 얼굴 하나에만 적용됩니다.
+- **눈 크게 / 얼굴 갸름(웹 전용)**: MediaPipe Face Landmarker로 얼굴 랜드마크를 찾고, 셰이더 맨 앞에서 샘플링 좌표를 옮깁니다. 눈은 원형 bulge를 씁니다. 얼굴 갸름은 눈 사이 → 턱 축을 기준으로 한 얼굴 좌표에서 아래 얼굴을 중심선 쪽으로 매끄럽게 좁힙니다. 광대 아래부터 시작해 턱선에서 가장 강하고, 턱 아래와 얼굴 바깥에서는 사라집니다. 코·입은 거의 그대로 두고, 접히지 않는(단조) 범위 안에서만 좁힙니다. 사진에서 가장 크게 나온 얼굴 하나에만 적용됩니다.
   - MediaPipe JS·WASM은 postinstall(`scripts/setup-mediapipe.js`)이 `public/mediapipe/`에 복사합니다. 번들 안의 동적 `import(url)`을 Metro가 변환하지 못해, Metro를 거치지 않고 브라우저가 직접 import합니다. 모델(`face_landmarker.task`, 약 3.6MB)은 처음 쓸 때 Google 모델 저장소에서 받습니다.
   - 이미지 입력에 WebGL이 필요합니다. 일반 브라우저에는 있지만 WebGL이 없는 헤드리스 브라우저에서는 ‘얼굴 인식을 불러오지 못했어요’가 표시됩니다.
   - 네이티브는 랜드마크 검출을 연결하지 않아 두 슬라이더를 숨깁니다(`services/faceLandmarks.ts`). Vision / ML Kit(Development Build)으로 `FaceGeometry`만 채우면 셰이더는 그대로 씁니다.
