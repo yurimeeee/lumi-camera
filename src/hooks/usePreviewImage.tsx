@@ -3,7 +3,6 @@ import {
   Circle,
   Group,
   LinearGradient,
-  Oval,
   Rect,
   vec,
   type SkImage,
@@ -17,7 +16,7 @@ import { normalizeImage, THUMB_MAX_SIDE } from '@/services/imagePipeline';
 /**
  * Small source image for filter thumbnails: the user's latest photo when
  * there is one, otherwise a procedurally drawn golden-hour scene (sky, sun,
- * sea, a peach bloom) that shows off each look's colour response.
+ * sea) that shows off each look's colour response.
  */
 
 const SAMPLE_W = 540;
@@ -42,12 +41,6 @@ function drawSample(): Promise<SkImage | null> {
       </Rect>
       <Rect x={w * 0.5} y={horizon + 4 * u} width={w * 0.3} height={2 * u} color="#FFE2BE" opacity={0.7} />
       <Rect x={w * 0.56} y={horizon + 12 * u} width={w * 0.18} height={2 * u} color="#FFE2BE" opacity={0.5} />
-      <Group>
-        <Oval x={w * 0.06} y={h * 0.7} width={w * 0.42} height={h * 0.26} color="#F2C2B0" />
-        <Oval x={w * 0.14} y={h * 0.74} width={w * 0.26} height={h * 0.16} color="#E9A694" />
-        <Oval x={w * 0.2} y={h * 0.78} width={w * 0.13} height={h * 0.08} color="#C9786A" />
-        <Oval x={w * 0.4} y={h * 0.82} width={w * 0.24} height={h * 0.12} color="#8E9A6C" />
-      </Group>
     </Group>,
     w,
     h,

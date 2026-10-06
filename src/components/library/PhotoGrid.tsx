@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
 import { memo, useCallback } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, useWindowDimensions, View, type ListRenderItem } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View, type ListRenderItem } from 'react-native';
 
 import { colors, spacing } from '@/constants/theme';
+import { useAppDimensions } from '@/hooks/useAppDimensions';
 import type { LibraryPhoto } from '@/services/mediaLibrary';
 
 const COLUMNS = 3;
@@ -52,7 +53,7 @@ const Cell = memo(function Cell({
 });
 
 export function PhotoGrid({ photos, onPress, onEndReached, loadingId, header }: Props) {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const size = Math.floor((width - GAP * (COLUMNS - 1)) / COLUMNS);
 
   const renderItem: ListRenderItem<LibraryPhoto> = useCallback(

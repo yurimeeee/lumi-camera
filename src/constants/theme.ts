@@ -72,3 +72,9 @@ export const MIN_TOUCH = 44;
 
 /** react-native-web colours the "on" switch thumb via a web-only prop. */
 export const WEB_SWITCH = Platform.OS === 'web' ? { activeThumbColor: colors.white } : {};
+
+/**
+ * Lumi is a phone layout. On wide screens (web on desktop) the app is shown
+ * in a centred column of this width instead of stretching edge to edge.
+ */
+export const APP_MAX_WIDTH = 480;

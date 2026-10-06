@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radius, spacing, typography } from '@/constants/theme';
+import { APP_MAX_WIDTH, colors, radius, spacing, typography } from '@/constants/theme';
 
 interface Props {
   visible: boolean;
@@ -47,6 +47,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    // Match the app column on wide (desktop web) windows.
+    maxWidth: APP_MAX_WIDTH,
+    marginHorizontal: 'auto',
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,

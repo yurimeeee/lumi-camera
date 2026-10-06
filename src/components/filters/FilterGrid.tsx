@@ -1,8 +1,9 @@
 import type { SkImage } from '@shopify/react-native-skia';
 import type { ReactElement } from 'react';
-import { FlatList, StyleSheet, useWindowDimensions } from 'react-native';
+import { FlatList, StyleSheet } from 'react-native';
 
 import { spacing } from '@/constants/theme';
+import { useAppDimensions } from '@/hooks/useAppDimensions';
 import type { FilterDefinition } from '@/types/filters';
 
 import { FilterCard } from './FilterCard';
@@ -19,7 +20,7 @@ interface Props {
 }
 
 export function FilterGrid({ filters, image, onPress, removable, header, empty }: Props) {
-  const { width } = useWindowDimensions();
+  const { width } = useAppDimensions();
   const cell = Math.floor((width - spacing.lg * 2 - spacing.md * (COLUMNS - 1)) / COLUMNS);
   return (
     <FlatList

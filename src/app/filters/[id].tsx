@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@shopify/react-native-skia';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,6 +11,7 @@ import { PressableScale } from '@/components/common/PressableScale';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
 import { CATEGORY_LABEL, getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { useAppDimensions } from '@/hooks/useAppDimensions';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { LumiLayer } from '@/render/LumiLayer';
 import { feedback } from '@/services/feedback';
@@ -24,7 +25,7 @@ export default function FilterDetailScreen() {
   const [id, setId] = useState(params.id ?? 'original');
   const [tab, setTab] = useState<FilterTab>('all');
   const insets = useSafeAreaInsets();
-  const { width: screenW, height: screenH } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useAppDimensions();
   const filter = getFilter(id);
   const favorite = useIsFavorite(filter.id);
   const lastPhotoUri = useCameraStore((s) => s.lastPhotoUri);

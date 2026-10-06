@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,6 +26,7 @@ import { FilterCarousel } from '@/components/filters/FilterCarousel';
 import { FLASH_OPTIONS, labelOf, nextOf, RATIO_OPTIONS } from '@/constants/camera';
 import { getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { useAppDimensions } from '@/hooks/useAppDimensions';
 import { useCapture } from '@/hooks/useCapture';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { feedback } from '@/services/feedback';
@@ -49,7 +50,7 @@ function fitFrame(boxW: number, boxH: number, aspect: number | null): Frame {
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
-  const { width: screenW, height: screenH } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useAppDimensions();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [ready, setReady] = useState(false);
