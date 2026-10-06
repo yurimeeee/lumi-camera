@@ -16,9 +16,9 @@ import {
   DEFAULT_BRUSH,
   EffectsPanel,
   FilterPanel,
-  ReshapePanel,
   RetouchPanel,
   toBrush,
+  TouchPanel,
 } from '@/components/editor/panels';
 import { aspectRatioOf } from '@/constants/crop';
 import { colors, radius, spacing, typography } from '@/constants/theme';
@@ -176,7 +176,7 @@ export default function EditorScreen() {
           {tool === 'filter' ? <FilterPanel thumbImage={thumbImage} /> : null}
           {tool === 'adjust' ? <AdjustPanel /> : null}
           {tool === 'retouch' ? <RetouchPanel faceStatus={faceStatus} /> : null}
-          {tool === 'reshape' ? <ReshapePanel brush={brush} onChange={setBrush} /> : null}
+          {tool === 'reshape' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}
           {tool === 'crop' ? <CropPanel source={source} /> : null}
           {tool === 'effects' ? <EffectsPanel /> : null}
         </Animated.View>

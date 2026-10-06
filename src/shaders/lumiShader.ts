@@ -1,5 +1,6 @@
 import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
 
+import { MAX_SPOTS } from '@/services/blemish';
 import { RESHAPE_RANGE } from '@/services/reshape';
 
 /**
@@ -65,6 +66,10 @@ uniform float2 uFaceOrigin;
 uniform float2 uFaceDown;
 uniform float uFaceHalfWidth;
 uniform float uFaceLength;
+
+// 잡티 제거: xy = centre, z = radius (render pixels).
+uniform float3 uSpots[${MAX_SPOTS}];
+uniform float uSpotCount;
 
 uniform float3 uShadowTint;
 uniform float3 uHighlightTint;
@@ -163,9 +168,44 @@ float2 reshape(float2 p) {
   return p + (v - 0.5) * ${(RESHAPE_RANGE * 2).toFixed(4)} * uResolution;
 }
 
+float3 blur4(float2 p, float r) {
+  return (image.eval(p + float2(r, 0.0)).rgb + image.eval(p - float2(r, 0.0)).rgb +
+          image.eval(p + float2(0.0, r)).rgb + image.eval(p - float2(0.0, r)).rgb) * 0.25;
+}
+
+// 잡티 제거 (frequency-separated heal): the tone comes from a ring of softly
+// blurred skin just outside the spot, weighted toward the side the pixel is
+// on; the fine texture comes from the skin beside the spot, so the patch
+// keeps pores instead of looking smeared. Feathered to the rim.
+float3 heal(float2 p, float3 c) {
+  for (int i = 0; i < ${MAX_SPOTS}; i++) {
+    if (float(i) >= uSpotCount) break;
+    float3 spot = uSpots[i];
+    float r = spot.z;
+    float dist = length(p - spot.xy);
+    if (dist >= r) continue;
+    float3 sum = float3(0.0);
+    float wsum = 0.0;
+    for (int k = 0; k < 12; k++) {
+      float a = float(k) * 0.5235988;
+      float2 q = spot.xy + float2(cos(a), sin(a)) * r * 1.3;
+      float w = 1.0 / (0.15 * r + length(p - q));
+      w *= w;
+      sum += blur4(q, r * 0.3) * w;
+      wsum += w;
+    }
+    float2 donor = p + float2(r * 2.2, 0.0);
+    float3 grain = image.eval(donor).rgb - blur4(donor, max(r * 0.3, 1.0));
+    float3 fill = sum / wsum + grain;
+    c = mix(c, fill, 1.0 - smoothstep(0.7, 1.0, dist / r));
+  }
+  return c;
+}
+
 half4 main(float2 pos) {
   float2 xy = faceWarp(uReshape > 0.5 ? reshape(pos) : pos);
   float3 src = image.eval(xy).rgb;
+  if (uSpotCount > 0.0) src = heal(xy, src);
   float3 c = src;
   float px = uPixel;
 

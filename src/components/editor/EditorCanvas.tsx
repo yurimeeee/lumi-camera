@@ -15,6 +15,8 @@ import { buildUniforms, isIdentity, resolveProcessing } from '@/services/imagePr
 import { frameSize, frameToSource } from '@/services/reshape';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { MAX_SPOTS, spotUniforms } from '@/services/blemish';
+import { showToast } from '@/stores/toastStore';
 import type { FaceGeometry, Geometry, SourceImage } from '@/types/editing';
 import { formatDateStamp } from '@/utils/dateStamp';
 
@@ -35,6 +37,8 @@ interface Props {
 }
 
 export interface Brush {
+  /** push = 밀기 (drag), spot = 잡티 제거 (tap). */
+  mode: 'push' | 'spot';
   /** Radius as a fraction of the photo's short side. */
   radius: number;
   /** Share of the finger's travel the content follows (0…1). */
@@ -71,6 +75,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const adjustments = useEditorStore((s) => s.present.adjustments);
   const retouch = useEditorStore((s) => s.present.retouch);
   const strokes = useEditorStore((s) => s.present.reshape);
+  const spots = useEditorStore((s) => s.present.spots);
   const dateStamp = useEditorStore((s) => s.present.dateStamp);
   const takenAt = useEditorStore((s) => s.source?.takenAt ?? 0);
   const dateFormat = useSettingsStore((s) => s.dateFormat);
@@ -82,8 +87,9 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   const uniforms = useMemo(() => {
     const p = resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch });
-    return isIdentity(p) && !reshape ? null : buildUniforms(p, width, height, face);
-  }, [filterId, intensity, adjustments, retouch, width, height, face, reshape]);
+    if (isIdentity(p) && !reshape && spots.length === 0) return null;
+    return buildUniforms(p, width, height, face, spotUniforms(spots, geometry, source, width, height));
+  }, [filterId, intensity, adjustments, retouch, width, height, face, reshape, spots, geometry, source]);
 
   // ── 터치 보정 ────────────────────────────────────────────
   const brushPx = brush ? brush.radius * Math.min(width, height) : 0;
@@ -107,10 +113,23 @@ export const EditorCanvas = memo(function EditorCanvas({
     return frameToSource({ x: u, y: v }, geometry);
   };
 
+  const frameShortOfSource = () => {
+    const frame = frameSize(source.width, source.height, geometry);
+    return Math.min(frame.width, frame.height) / Math.min(source.width, source.height);
+  };
+
+  const spotTap = (x: number, y: number) => {
+    if (!brush) return;
+    if (useEditorStore.getState().present.spots.length >= MAX_SPOTS) {
+      showToast(`잡티는 한 사진에 ${MAX_SPOTS}개까지 지울 수 있어요`);
+      return;
+    }
+    useEditorStore.getState().addSpot({ ...toSource(x, y), radius: brush.radius * frameShortOfSource() });
+  };
+
   const strokeStart = (x: number, y: number) => {
     if (!brush) return;
-    const frame = frameSize(source.width, source.height, geometry);
-    const radiusOfSource = (brush.radius * Math.min(frame.width, frame.height)) / Math.min(source.width, source.height);
+    const radiusOfSource = brush.radius * frameShortOfSource();
     last.current = { x, y };
     useEditorStore.getState().beginStroke(toSource(x, y), radiusOfSource, brush.strength);
   };
@@ -144,6 +163,15 @@ export const EditorCanvas = memo(function EditorCanvas({
       scheduleOnRN(strokeEnd);
     });
 
+  const tap = Gesture.Tap()
+    .maxDistance(12)
+    .onEnd((e) => {
+      cursorX.set(e.x);
+      cursorY.set(e.y);
+      cursorOpacity.set(withSequence(withTiming(1, { duration: 60 }), withDelay(250, withTiming(0, { duration: 200 }))));
+      scheduleOnRN(spotTap, e.x, e.y);
+    });
+
   const hold = Gesture.LongPress()
     .minDuration(220)
     .onStart(() => scheduleOnRN(onBeforeChange, true))
@@ -155,11 +183,17 @@ export const EditorCanvas = memo(function EditorCanvas({
   }));
 
   return (
-    <GestureDetector gesture={brush ? push : hold}>
+    <GestureDetector gesture={brush ? (brush.mode === 'spot' ? tap : push) : hold}>
       <View
         style={[styles.box, { width: boxWidth, height: boxHeight }]}
         accessible
-        accessibilityLabel={brush ? '편집 중인 사진. 드래그해 밀어서 다듬기' : '편집 중인 사진. 길게 눌러 원본 보기'}
+        accessibilityLabel={
+          brush
+            ? brush.mode === 'spot'
+              ? '편집 중인 사진. 잡티를 눌러 지우기'
+              : '편집 중인 사진. 드래그해 밀어서 다듬기'
+            : '편집 중인 사진. 길게 눌러 원본 보기'
+        }
       >
         <View style={[styles.photo, { width, height }]}>
           <Canvas style={{ width, height }}>

@@ -3,6 +3,8 @@ import type { Uniforms } from '@shopify/react-native-skia';
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { getFilter } from '@/constants/filters';
 import type { Adjustments, FaceGeometry, RGB, Retouch, ToneKey, ToneParams } from '@/types/editing';
+
+import { NO_SPOTS, type SpotUniforms } from './blemish';
 import type { FilterDefinition } from '@/types/filters';
 
 /**
@@ -90,6 +92,7 @@ function faceUniforms(face: FaceGeometry | null, width: number, height: number) 
  * @param width  render target width in canvas units
  * @param height render target height in canvas units
  * @param face   landmarks for the face warp (눈 크게 / 얼굴 갸름), if detected
+ * @param spots  잡티 제거 spots for this render target (see spotUniforms)
  * @param grainSeed stable seed so grain doesn't "boil" while editing
  */
 export function buildUniforms(
@@ -97,6 +100,7 @@ export function buildUniforms(
   width: number,
   height: number,
   face: FaceGeometry | null = null,
+  spots: SpotUniforms = NO_SPOTS,
   grainSeed = 13.7,
 ): Uniforms {
   const t = p.tone;
@@ -128,6 +132,7 @@ export function buildUniforms(
     uEyes: face ? Math.max(0, n(t.eyes)) : 0,
     uSlim: face ? Math.max(0, n(t.slim)) : 0,
     ...faceUniforms(face, width, height),
+    ...spots,
     uShadowTint: [...p.split.shadows],
     uHighlightTint: [...p.split.highlights],
     uSplit: n(p.split.amount),

@@ -9,6 +9,7 @@ import type {
   CropAspectId,
   EditState,
   Geometry,
+  BlemishSpot,
   NormalizedPoint,
   NormalizedRect,
   ReshapeStroke,
@@ -36,6 +37,7 @@ export function createEditState(partial?: Partial<EditState>): EditState {
     retouch: { ...DEFAULT_RETOUCH },
     geometry: { ...DEFAULT_GEOMETRY },
     reshape: [],
+    spots: [],
     dateStamp: false,
     ...partial,
   };
@@ -64,6 +66,9 @@ interface EditorActions {
   beginStroke: (point: NormalizedPoint, radius: number, strength: number) => void;
   extendStroke: (point: NormalizedPoint) => void;
   clearReshape: () => void;
+  /** 잡티 제거: one undo step per tap. */
+  addSpot: (spot: Omit<BlemishSpot, 'id'>) => void;
+  clearSpots: () => void;
 
   /** Discrete updates — committed immediately. */
   setFilter: (id: string) => void;
@@ -131,6 +136,11 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
         const stroke: ReshapeStroke = { ...last, points: [...last.points, point] };
         return { present: { ...s.present, reshape: [...strokes.slice(0, -1), stroke] } };
       }),
+    addSpot: (spot) => update((s) => ({ ...s, spots: [...s.spots, { ...spot, id: nextStrokeId++ }] })),
+    clearSpots: () => {
+      if (get().present.spots.length === 0) return;
+      update((s) => ({ ...s, spots: [] }));
+    },
     clearReshape: () => {
       if (get().present.reshape.length === 0) return;
       update((s) => ({ ...s, reshape: [] }));

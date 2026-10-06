@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { IconButton } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
+import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { SliderControl } from '@/components/common/SliderControl';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
 import { ADJUST_TOOLS, EFFECT_TOOLS, FACE_RETOUCH_KEYS, RETOUCH_TOOLS } from '@/constants/adjustments';
@@ -143,66 +144,105 @@ export function RetouchPanel({ faceStatus }: { faceStatus: FaceStatus }) {
   );
 }
 
+export type TouchMode = 'push' | 'spot';
+
 export interface BrushSettings {
-  /** 0…100 */
+  mode: TouchMode;
+  /** 밀기 brush size, 0…100 */
   size: number;
-  /** 0…100 */
+  /** 밀기 strength, 0…100 */
   strength: number;
+  /** 잡티 size, 0…100 */
+  spotSize: number;
 }
 
-export const DEFAULT_BRUSH: BrushSettings = { size: 35, strength: 35 };
+export const DEFAULT_BRUSH: BrushSettings = { mode: 'push', size: 35, strength: 35, spotSize: 20 };
 
-/** Panel sliders → brush: radius 3…15 % of the short side, content follows 4…30 % of the finger. */
-export function toBrush({ size, strength }: BrushSettings): Brush {
-  return { radius: 0.03 + (size / 100) * 0.12, strength: 0.04 + (strength / 100) * 0.26 };
+/**
+ * Panel sliders → brush. 밀기: radius 3…15 % of the short side, content
+ * follows 4…30 % of the finger. 잡티: radius 0.5…3.5 %.
+ */
+export function toBrush({ mode, size, strength, spotSize }: BrushSettings): Brush {
+  if (mode === 'spot') return { mode, radius: 0.005 + (spotSize / 100) * 0.03, strength: 0 };
+  return { mode, radius: 0.03 + (size / 100) * 0.12, strength: 0.04 + (strength / 100) * 0.26 };
 }
 
-export function ReshapePanel({ brush, onChange }: { brush: BrushSettings; onChange: (b: BrushSettings) => void }) {
+const TOUCH_MODES = [
+  { value: 'push', label: '밀기' },
+  { value: 'spot', label: '잡티 제거' },
+] as const;
+
+export function TouchPanel({ brush, onChange }: { brush: BrushSettings; onChange: (b: BrushSettings) => void }) {
   const strokes = useEditorStore((s) => s.present.reshape.length);
-  const { clearReshape } = useEditorStore.getState();
+  const spots = useEditorStore((s) => s.present.spots.length);
+  const { clearReshape, clearSpots } = useEditorStore.getState();
+  const spot = brush.mode === 'spot';
+  const count = spot ? spots : strokes;
+
+  const trash = (
+    <IconButton
+      icon="trash-outline"
+      size={18}
+      disabled={count === 0}
+      color={colors.textSecondary}
+      accessibilityLabel={spot ? '잡티 제거 모두 지우기' : '밀기 보정 모두 지우기'}
+      onPress={() => {
+        feedback.light();
+        if (spot) clearSpots();
+        else clearReshape();
+      }}
+    />
+  );
+
   return (
     <View>
+      <View style={styles.touchModes}>
+        <SegmentedControl
+          options={TOUCH_MODES}
+          value={brush.mode}
+          onChange={(mode) => onChange({ ...brush, mode })}
+          accessibilityLabel="터치 보정 종류"
+        />
+      </View>
       <View style={styles.intensityRow}>
         <Text style={styles.filterName}>크기</Text>
         <View style={styles.flex}>
           <SliderControl
-            value={brush.size}
+            value={spot ? brush.spotSize : brush.size}
             min={0}
             max={100}
-            onChange={(size) => onChange({ ...brush, size })}
-            resetValue={DEFAULT_BRUSH.size}
+            onChange={(v) => onChange(spot ? { ...brush, spotSize: v } : { ...brush, size: v })}
+            resetValue={spot ? DEFAULT_BRUSH.spotSize : DEFAULT_BRUSH.size}
             accessibilityLabel="브러시 크기"
           />
         </View>
-        <View style={styles.trashSpacer} />
+        {spot ? trash : <View style={styles.trashSpacer} />}
       </View>
-      <View style={styles.intensityRow}>
-        <Text style={styles.filterName}>강도</Text>
-        <View style={styles.flex}>
-          <SliderControl
-            value={brush.strength}
-            min={0}
-            max={100}
-            onChange={(strength) => onChange({ ...brush, strength })}
-            resetValue={DEFAULT_BRUSH.strength}
-            accessibilityLabel="브러시 강도"
-          />
-        </View>
-        <IconButton
-          icon="trash-outline"
-          size={18}
-          disabled={strokes === 0}
-          color={colors.textSecondary}
-          accessibilityLabel="터치 보정 모두 지우기"
-          onPress={() => {
-            feedback.light();
-            clearReshape();
-          }}
-        />
-      </View>
-      <Text style={styles.reshapeHint}>
-        짧게 여러 번 밀수록 자연스러워요.{'\n'}턱선·볼은 바깥에서 안쪽으로 조금씩 밀어 주세요.
-      </Text>
+      {spot ? (
+        <Text style={styles.reshapeHint}>
+          잡티보다 조금 크게 맞추고 톡 눌러 주세요.{'\n'}주변 피부결로 자연스럽게 채워져요.
+        </Text>
+      ) : (
+        <>
+          <View style={styles.intensityRow}>
+            <Text style={styles.filterName}>강도</Text>
+            <View style={styles.flex}>
+              <SliderControl
+                value={brush.strength}
+                min={0}
+                max={100}
+                onChange={(strength) => onChange({ ...brush, strength })}
+                resetValue={DEFAULT_BRUSH.strength}
+                accessibilityLabel="브러시 강도"
+              />
+            </View>
+            {trash}
+          </View>
+          <Text style={styles.reshapeHint}>
+            짧게 여러 번 밀수록 자연스러워요.{'\n'}턱선·볼은 바깥에서 안쪽으로 조금씩 밀어 주세요.
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -286,6 +326,10 @@ const styles = StyleSheet.create({
     ...typography.filterName,
     color: colors.text,
     width: 64,
+  },
+  touchModes: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
   },
   trashSpacer: {
     width: 44,

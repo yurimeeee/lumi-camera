@@ -70,7 +70,16 @@ export interface EditState {
   geometry: Geometry;
   /** 터치 보정 strokes, in drawing order. */
   reshape: readonly ReshapeStroke[];
+  /** 잡티 제거 spots, in tap order. */
+  spots: readonly BlemishSpot[];
   dateStamp: boolean;
+}
+
+/** A blemish healed by 잡티 제거; centre normalised against the source image. */
+export interface BlemishSpot extends NormalizedPoint {
+  id: number;
+  /** Radius as a fraction of the source image's short side. */
+  radius: number;
 }
 
 /**

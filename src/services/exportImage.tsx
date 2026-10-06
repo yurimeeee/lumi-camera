@@ -14,6 +14,7 @@ import { withExif } from './exif';
 import { detectFace } from './faceLandmarks';
 import { applyGeometry, EXPORT_MAX_SIDE_HQ, EXPORT_MAX_SIDE_STD, type ImageFile } from './imagePipeline';
 import { buildUniforms, isIdentity, resolveProcessing } from './imageProcessing';
+import { spotUniforms } from './blemish';
 import { buildReshapeField } from './reshape';
 import type { GeoPoint } from './location';
 
@@ -74,7 +75,10 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const reshape = edit.reshape.length
     ? buildReshapeField(edit.reshape, edit.geometry, source.width, source.height).toTextures()
     : null;
-  const uniforms = isIdentity(processing) && !reshape ? null : buildUniforms(processing, width, height, face);
+  const uniforms =
+    isIdentity(processing) && !reshape && edit.spots.length === 0
+      ? null
+      : buildUniforms(processing, width, height, face, spotUniforms(edit.spots, edit.geometry, source, width, height));
   const stamp =
     edit.dateStamp && opts.stampTypeface ? formatDateStamp(source.takenAt, opts.dateFormat) : null;
 
