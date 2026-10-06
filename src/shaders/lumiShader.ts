@@ -173,31 +173,63 @@ float3 blur4(float2 p, float r) {
           image.eval(p + float2(0.0, r)).rgb + image.eval(p - float2(0.0, r)).rgb) * 0.25;
 }
 
-// 잡티 제거 (frequency-separated heal): the tone comes from a ring of softly
-// blurred skin just outside the spot, weighted toward the side the pixel is
-// on; the fine texture comes from the skin beside the spot, so the patch
-// keeps pores instead of looking smeared. Feathered to the rim.
+// 잡티 제거 (frequency-separated heal).
+// Tone: a ring of softly blurred skin just outside the spot, weighted toward
+// the side the pixel is on; ring samples darker than the ring's average (the
+// blemish leaking past a too-small circle) count less.
+// Texture: fine detail from whichever of 8 nearby patches best matches the
+// ring tone, so pores carry over but brows, lips or creases don't.
+// Mask: feathered to the rim, and a little past it wherever the pixel still
+// differs from the fill (a slightly off-centre tap leaves no halo).
 float3 heal(float2 p, float3 c) {
   for (int i = 0; i < ${MAX_SPOTS}; i++) {
     if (float(i) >= uSpotCount) break;
     float3 spot = uSpots[i];
     float r = spot.z;
     float dist = length(p - spot.xy);
-    if (dist >= r) continue;
+    if (dist >= r * 1.25) continue;
+
+    float3 ring[12];
+    float3 mean = float3(0.0);
+    for (int k = 0; k < 12; k++) {
+      float a = float(k) * 0.5235988;
+      ring[k] = blur4(spot.xy + float2(cos(a), sin(a)) * r * 1.3, r * 0.3);
+      mean += ring[k];
+    }
+    mean /= 12.0;
+    float lm = luma(mean);
     float3 sum = float3(0.0);
     float wsum = 0.0;
     for (int k = 0; k < 12; k++) {
       float a = float(k) * 0.5235988;
       float2 q = spot.xy + float2(cos(a), sin(a)) * r * 1.3;
-      float w = 1.0 / (0.15 * r + length(p - q));
-      w *= w;
-      sum += blur4(q, r * 0.3) * w;
+      float dark = max(0.0, lm - luma(ring[k]));
+      float w = exp(-dark * dark * 400.0) / pow(0.15 * r + length(p - q), 2.0);
+      sum += ring[k] * w;
       wsum += w;
     }
-    float2 donor = p + float2(r * 2.2, 0.0);
+    float3 tone = sum / wsum;
+
+    float2 offset = float2(r * 2.2, 0.0);
+    float bestErr = 1e9;
+    for (int k = 0; k < 8; k++) {
+      float a = float(k) * 0.7853982;
+      float2 o = float2(cos(a), sin(a)) * r * 2.2;
+      float3 d = blur4(spot.xy + o, r * 0.6) - tone;
+      float err = dot(d, d);
+      if (err < bestErr) {
+        bestErr = err;
+        offset = o;
+      }
+    }
+    float2 donor = p + offset;
     float3 grain = image.eval(donor).rgb - blur4(donor, max(r * 0.3, 1.0));
-    float3 fill = sum / wsum + grain;
-    c = mix(c, fill, 1.0 - smoothstep(0.7, 1.0, dist / r));
+    float3 fill = tone + grain;
+
+    float t = dist / r;
+    float m = 1.0 - smoothstep(0.7, 1.0, t);
+    float halo = smoothstep(0.04, 0.1, length(c - tone)) * (1.0 - smoothstep(1.0, 1.25, t));
+    c = mix(c, fill, max(m, halo));
   }
   return c;
 }
