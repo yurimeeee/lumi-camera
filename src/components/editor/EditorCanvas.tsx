@@ -19,14 +19,17 @@ import { useReshapeField } from '@/hooks/useReshapeField';
 import type { WorkingImage } from '@/hooks/useWorkingImage';
 import { useZoom } from '@/hooks/useZoom';
 import { DateStampLayer } from '@/render/DateStampLayer';
+import { FaceGuides, LandmarkDebugLayer } from '@/render/FaceOverlays';
 import { LumiLayer } from '@/render/LumiLayer';
+import type { DetectedFace } from '@/services/faceDetection/types';
+import { buildFaceWarp, faceWarpUniforms, prepareFaceInputs } from '@/services/faceWarp/FaceWarpEngine';
 import { buildUniforms, isIdentity, resolveProcessing } from '@/services/imageProcessing';
-import { frameSize, frameToSource } from '@/services/reshape';
+import { frameSize, frameToSource, sourceToFrame } from '@/services/reshape';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { MAX_SPOTS, spotUniforms } from '@/services/blemish';
 import { showToast } from '@/stores/toastStore';
-import type { FaceGeometry, Geometry, SourceImage } from '@/types/editing';
+import type { Geometry, SourceImage } from '@/types/editing';
 import { formatDateStamp } from '@/utils/dateStamp';
 
 interface Props {
@@ -39,8 +42,15 @@ interface Props {
   showOriginal: boolean;
   onBeforeChange: (on: boolean) => void;
   typeface: SkTypeface | null;
-  /** Landmarks of `working.image` for 눈 크게 / 얼굴 갸름. */
-  face: FaceGeometry | null;
+  /** Faces detected in the source image (landmarks normalised to the source). */
+  faces: readonly DetectedFace[];
+  /** Face the retouch panel edits; outlined when `showFaceGuides`. */
+  selectedFaceId: string | null;
+  onSelectFace: (id: string) => void;
+  /** Subtle outlines to pick a face (Retouch tab, several faces). */
+  showFaceGuides: boolean;
+  /** Dev only: landmark dots per region. */
+  debugLandmarks: boolean;
   /** 터치 보정 brush; null when the tool is off. */
   brush: Brush | null;
   /** Pinch / wheel zoom (off while cropping, where the overlay maps the unzoomed frame). */
@@ -80,7 +90,11 @@ export const EditorCanvas = memo(function EditorCanvas({
   showOriginal,
   onBeforeChange,
   typeface,
-  face,
+  faces,
+  selectedFaceId,
+  onSelectFace,
+  showFaceGuides,
+  debugLandmarks,
   brush,
   zoomEnabled,
 }: Props) {
@@ -90,6 +104,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   const retouch = useEditorStore((s) => s.present.retouch);
   const strokes = useEditorStore((s) => s.present.reshape);
   const spots = useEditorStore((s) => s.present.spots);
+  const faceEdits = useEditorStore((s) => s.present.faces);
   const dateStamp = useEditorStore((s) => s.present.dateStamp);
   const takenAt = useEditorStore((s) => s.source?.takenAt ?? 0);
   const dateFormat = useSettingsStore((s) => s.dateFormat);
@@ -115,11 +130,31 @@ export const EditorCanvas = memo(function EditorCanvas({
   ]);
   const photoClip = useMemo(() => rrect(rect(0, 0, width, height), radius.sm, radius.sm), [width, height]);
 
+  // Face warp in canvas pixels; rebuilt from the original landmarks on every
+  // change (cheap: a few dozen points), evaluated per pixel by the shader.
+  const facePlan = useMemo(
+    () => buildFaceWarp(prepareFaceInputs(faces, faceEdits, geometry), width, height),
+    [faces, faceEdits, geometry, width, height],
+  );
+
   const uniforms = useMemo(() => {
     const p = resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch });
-    if (isIdentity(p) && !reshape && spots.length === 0) return null;
-    return buildUniforms(p, width, height, face, spotUniforms(spots, geometry, source, width, height));
-  }, [filterId, intensity, adjustments, retouch, width, height, face, reshape, spots, geometry, source]);
+    if (isIdentity(p) && !reshape && spots.length === 0 && !facePlan) return null;
+    return buildUniforms(p, width, height, faceWarpUniforms(facePlan), spotUniforms(spots, geometry, source, width, height));
+  }, [filterId, intensity, adjustments, retouch, width, height, facePlan, reshape, spots, geometry, source]);
+
+  /** Face outlines in canvas pixels (for the selector and taps). */
+  const faceOutlines = useMemo(
+    () =>
+      faces.map((f) => ({
+        id: f.id,
+        points: f.landmarks.faceContour.map((pt) => {
+          const q = sourceToFrame(pt, geometry);
+          return { x: q.x * width, y: q.y * height };
+        }),
+      })),
+    [faces, geometry, width, height],
+  );
 
   // ── 터치 보정 ────────────────────────────────────────────
   const brushPx = brush ? brush.radius * Math.min(width, height) : 0;
@@ -216,6 +251,22 @@ export const EditorCanvas = memo(function EditorCanvas({
       scheduleOnRN(spotTap, e.x, e.y);
     });
 
+  const selectFaceAt = (x: number, y: number) => {
+    const p = zoom.toPhoto(x, y);
+    let best: { id: string; d: number } | null = null;
+    for (const o of faceOutlines) {
+      if (!insidePolygon(p, o.points)) continue;
+      const c = centroidOf(o.points);
+      const d = Math.hypot(c.x - p.x, c.y - p.y);
+      if (!best || d < best.d) best = { id: o.id, d };
+    }
+    if (best && best.id !== selectedFaceId) onSelectFace(best.id);
+  };
+
+  const faceTap = Gesture.Tap()
+    .maxDistance(10)
+    .onEnd((e) => scheduleOnRN(selectFaceAt, e.x, e.y));
+
   const hold = Gesture.LongPress()
     .minDuration(220)
     .onStart(() => scheduleOnRN(onBeforeChange, true))
@@ -223,7 +274,9 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   const gesture = brush
     ? Gesture.Simultaneous(zoom.pinch, brush.mode === 'spot' ? tap : push)
-    : Gesture.Simultaneous(zoom.pinch, zoom.pan, Gesture.Exclusive(zoom.doubleTap, hold));
+    : showFaceGuides
+      ? Gesture.Simultaneous(zoom.pinch, zoom.pan, Gesture.Exclusive(zoom.doubleTap, hold, faceTap))
+      : Gesture.Simultaneous(zoom.pinch, zoom.pan, Gesture.Exclusive(zoom.doubleTap, hold));
 
   // Web: trackpad pinch / ctrl(⌘)+wheel zooms at the pointer, plain wheel pans while zoomed.
   const boxRef = useRef<View>(null);
@@ -269,7 +322,9 @@ export const EditorCanvas = memo(function EditorCanvas({
               : brush.mode === 'restore'
                 ? '편집 중인 사진. 문질러 원래대로 되돌리기'
                 : '편집 중인 사진. 드래그해 밀어서 다듬기'
-            : '편집 중인 사진. 길게 눌러 원본 보기'
+            : showFaceGuides
+              ? '편집 중인 사진. 얼굴을 눌러 보정할 얼굴 고르기, 길게 눌러 원본 보기'
+              : '편집 중인 사진. 길게 눌러 원본 보기'
         }
       >
         <Canvas style={StyleSheet.absoluteFill}>
@@ -282,6 +337,18 @@ export const EditorCanvas = memo(function EditorCanvas({
                 uniforms={showOriginal ? null : uniforms}
                 reshape={reshape}
               />
+              {showFaceGuides && !showOriginal ? (
+                <FaceGuides outlines={faceOutlines} selectedId={selectedFaceId} plan={facePlan} />
+              ) : null}
+              {__DEV__ && debugLandmarks ? (
+                <LandmarkDebugLayer
+                  faces={faces}
+                  geometry={geometry}
+                  width={width}
+                  height={height}
+                  plan={showOriginal ? null : facePlan}
+                />
+              ) : null}
               {dateStamp && typeface && !showOriginal ? (
                 <DateStampLayer
                   text={formatDateStamp(takenAt, dateFormat)}
@@ -314,6 +381,26 @@ export const EditorCanvas = memo(function EditorCanvas({
     </GestureDetector>
   );
 });
+
+function insidePolygon(p: { x: number; y: number }, poly: readonly { x: number; y: number }[]) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function centroidOf(pts: readonly { x: number; y: number }[]) {
+  let x = 0;
+  let y = 0;
+  for (const p of pts) {
+    x += p.x;
+    y += p.y;
+  }
+  return { x: x / Math.max(1, pts.length), y: y / Math.max(1, pts.length) };
+}
 
 const styles = StyleSheet.create({
   box: {

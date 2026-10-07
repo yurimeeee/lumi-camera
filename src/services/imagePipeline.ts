@@ -3,6 +3,8 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { Geometry, NormalizedRect } from '@/types/editing';
 import type { CaptureRatio } from '@/types/settings';
 
+import { rotatedSize } from './frameCoords';
+
 /**
  * Geometry & resampling. Everything that changes pixel dimensions goes
  * through expo-image-manipulator (native, off the JS thread); colour work is
@@ -51,9 +53,7 @@ export function cropToPixels(crop: NormalizedRect, width: number, height: number
   };
 }
 
-export function rotatedSize(width: number, height: number, rotation: Geometry['rotation']) {
-  return rotation % 180 === 0 ? { width, height } : { width: height, height: width };
-}
+export { rotatedSize } from './frameCoords';
 
 /**
  * Applies rotate → flip → crop, then downsizes to `maxSide`.

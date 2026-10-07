@@ -16,13 +16,14 @@ import {
   DEFAULT_BRUSH,
   EffectsPanel,
   FilterPanel,
-  RetouchPanel,
   toBrush,
   TouchPanel,
 } from '@/components/editor/panels';
+import { RetouchPanel } from '@/components/editor/RetouchPanel';
 import { aspectRatioOf } from '@/constants/crop';
+import { hasFaceEdits } from '@/constants/faceRetouch';
 import { colors, radius, spacing, typography } from '@/constants/theme';
-import { useFaceGeometry } from '@/hooks/useFaceGeometry';
+import { useFaces } from '@/hooks/useFaces';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { useSaveEdit } from '@/hooks/useSaveEdit';
 import { useWorkingImage } from '@/hooks/useWorkingImage';
@@ -51,9 +52,14 @@ export default function EditorScreen() {
   const displayGeometry = cropping ? { ...geometry, crop: null } : geometry;
   const working = useWorkingImage(source, displayGeometry);
   const thumbImage = usePreviewImage(source?.uri);
-  // Detect as soon as the retouch panel opens so the face tools respond right away.
-  const faceInUse = useEditorStore((s) => s.present.retouch.eyes > 0 || s.present.retouch.slim > 0);
-  const { face, status: faceStatus } = useFaceGeometry(working?.uri ?? null, faceInUse || tool === 'retouch');
+  // Detect as soon as the retouch panel opens so the face tools respond right
+  // away (and keep the result while face edits exist, e.g. after undo).
+  const faceInUse = useEditorStore((s) => hasFaceEdits(s.present.faces));
+  const { faces, status: faceStatus } = useFaces(source, faceInUse || tool === 'retouch');
+  const [pickedFaceId, setPickedFaceId] = useState<string | null>(null);
+  // The largest face until the user picks another one.
+  const selectedFaceId = faces.find((f) => f.id === pickedFaceId)?.id ?? faces[0]?.id ?? null;
+  const [debugLandmarks, setDebugLandmarks] = useState(false);
   const typeface = useTypeface(DATE_STAMP_FONT);
   const { save, saving } = useSaveEdit(typeface);
 
@@ -139,7 +145,11 @@ export default function EditorScreen() {
               showOriginal={before}
               onBeforeChange={setBefore}
               typeface={typeface}
-              face={face}
+              faces={faces}
+              selectedFaceId={selectedFaceId}
+              onSelectFace={setPickedFaceId}
+              showFaceGuides={tool === 'retouch' && faces.length > 1}
+              debugLandmarks={tool === 'retouch' && debugLandmarks}
               brush={tool === 'reshape' ? brushTool : null}
               zoomEnabled={!cropping}
             />
@@ -176,7 +186,15 @@ export default function EditorScreen() {
         <Animated.View key={tool} entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)} style={styles.panelBody}>
           {tool === 'filter' ? <FilterPanel thumbImage={thumbImage} /> : null}
           {tool === 'adjust' ? <AdjustPanel /> : null}
-          {tool === 'retouch' ? <RetouchPanel faceStatus={faceStatus} /> : null}
+          {tool === 'retouch' ? (
+            <RetouchPanel
+              faceStatus={faceStatus}
+              faceCount={faces.length}
+              selectedFaceId={selectedFaceId}
+              debugLandmarks={debugLandmarks}
+              onDebugLandmarks={setDebugLandmarks}
+            />
+          ) : null}
           {tool === 'reshape' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}
           {tool === 'crop' ? <CropPanel source={source} /> : null}
           {tool === 'effects' ? <EffectsPanel /> : null}

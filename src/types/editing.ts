@@ -21,7 +21,7 @@ export type AdjustmentKey =
   | 'vignette'
   | 'grain';
 
-export type RetouchKey = 'skin' | 'smooth' | 'tone' | 'glow' | 'detail' | 'eyes' | 'slim';
+export type RetouchKey = 'skin' | 'smooth' | 'tone' | 'glow' | 'detail';
 
 /** Every scalar the processing pipeline understands. */
 export type ToneKey = AdjustmentKey | RetouchKey;
@@ -72,8 +72,54 @@ export interface EditState {
   reshape: readonly ReshapeStroke[];
   /** 잡티 제거 spots, in tap order. */
   spots: readonly BlemishSpot[];
+  /**
+   * Face shape / feature retouch per detected face (by face id). Only faces
+   * the user has touched are present. Values are UI slider values; the warp
+   * engine turns them into face-relative deformations.
+   */
+  faces: Readonly<Record<string, FaceRetouch>>;
   dateStamp: boolean;
 }
+
+/** Face retouch controls. Ranges live in constants/faceRetouch.ts (0…100 or -100…100). */
+export type FaceRetouchKey =
+  // Face
+  | 'slim'
+  | 'faceWidth'
+  | 'jaw'
+  | 'chin'
+  | 'vLine'
+  | 'cheek'
+  | 'forehead'
+  // Eyes
+  | 'eyeSize'
+  | 'eyeWidth'
+  | 'eyeHeight'
+  | 'eyeDistance'
+  | 'eyePosition'
+  | 'outerCorner'
+  // Nose
+  | 'noseSlim'
+  | 'noseWidth'
+  | 'noseTip'
+  | 'noseSize'
+  | 'noseLength'
+  | 'noseWing'
+  // Lips
+  | 'lipSize'
+  | 'lipWidth'
+  | 'upperLip'
+  | 'lowerLip'
+  | 'mouthPosition'
+  | 'smile'
+  // Proportion
+  | 'midface'
+  | 'faceLength'
+  | 'upperFace'
+  | 'lowerFace'
+  | 'nosePosition';
+
+export type FaceRetouch = Record<FaceRetouchKey, number>;
 
 /** A blemish healed by 잡티 제거; centre normalised against the source image. */
 export interface BlemishSpot extends NormalizedPoint {
@@ -114,20 +160,4 @@ export interface SourceImage {
 export interface NormalizedPoint {
   x: number;
   y: number;
-}
-
-/**
- * Face landmarks needed by the face-shape warp, normalised against the image
- * the face was detected in. Lengths are fractions of the image width, so the
- * same geometry drives the preview and the full-resolution export.
- */
-export interface FaceGeometry {
-  /** Eye centres (image-left eye first). */
-  eyes: readonly [NormalizedPoint, NormalizedPoint];
-  /** Eye opening width, per eye. */
-  eyeWidths: readonly [number, number];
-  /** Chin tip; with the eye midpoint it spans the face's vertical axis. */
-  chin: NormalizedPoint;
-  /** Cheek-to-cheek width. */
-  width: number;
 }

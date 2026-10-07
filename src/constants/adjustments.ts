@@ -1,7 +1,7 @@
 import type { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 
-import type { AdjustmentKey, Adjustments, Retouch, RetouchKey } from '@/types/editing';
+import type { AdjustmentKey, Adjustments, Retouch } from '@/types/editing';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -34,19 +34,6 @@ export const EFFECT_TOOLS: readonly ControlSpec<AdjustmentKey>[] = [
   { key: 'grain', label: '그레인', icon: 'grid-outline', min: 0, max: 100 },
 ];
 
-export const RETOUCH_TOOLS: readonly ControlSpec<RetouchKey>[] = [
-  { key: 'skin', label: '피부결', icon: 'happy-outline', min: 0, max: 100 },
-  { key: 'smooth', label: '잡티 완화', icon: 'sparkles-outline', min: 0, max: 100 },
-  { key: 'tone', label: '톤 보정', icon: 'color-wand-outline', min: -100, max: 100 },
-  { key: 'glow', label: '광채', icon: 'sunny-outline', min: 0, max: 100 },
-  { key: 'detail', label: '디테일', icon: 'eye-outline', min: 0, max: 100 },
-  { key: 'eyes', label: '눈 크게', icon: 'expand-outline', min: 0, max: 100 },
-  { key: 'slim', label: '얼굴 갸름', icon: 'person-outline', min: 0, max: 100 },
-];
-
-/** Retouch tools that reshape the face and need face landmarks. */
-export const FACE_RETOUCH_KEYS: readonly RetouchKey[] = ['eyes', 'slim'];
-
 export const DEFAULT_ADJUSTMENTS: Adjustments = {
   brightness: 0,
   exposure: 0,
@@ -71,6 +58,4 @@ export const DEFAULT_RETOUCH: Retouch = {
   tone: 0,
   glow: 0,
   detail: 0,
-  eyes: 0,
-  slim: 0,
 };

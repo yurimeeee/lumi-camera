@@ -2,9 +2,10 @@ import type { Uniforms } from '@shopify/react-native-skia';
 
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { getFilter } from '@/constants/filters';
-import type { Adjustments, FaceGeometry, RGB, Retouch, ToneKey, ToneParams } from '@/types/editing';
+import type { Adjustments, RGB, Retouch, ToneKey, ToneParams } from '@/types/editing';
 
 import { NO_SPOTS, type SpotUniforms } from './blemish';
+import { NO_FACE_WARP, type FaceWarpUniforms } from './faceWarp/FaceWarpEngine';
 import type { FilterDefinition } from '@/types/filters';
 
 /**
@@ -57,41 +58,10 @@ export function isIdentity(p: ResolvedProcessing): boolean {
   return p.split.amount === 0 && TONE_KEYS.every((key) => p.tone[key] === 0);
 }
 
-/** Face landmarks in render-target pixels; all zero (warp off) without a face. */
-function faceUniforms(face: FaceGeometry | null, width: number, height: number) {
-  if (!face) {
-    return {
-      uEyeL: [0, 0, 0],
-      uEyeR: [0, 0, 0],
-      uFaceOrigin: [0, 0],
-      uFaceDown: [0, 1],
-      uFaceHalfWidth: 0,
-      uFaceLength: 0,
-    };
-  }
-  const at = (pt: { x: number; y: number }): [number, number] => [pt.x * width, pt.y * height];
-  // The eye ellipse reaches past the lids so the bulge fades out on the skin.
-  const eye = (i: 0 | 1): [number, number, number] => [...at(face.eyes[i]), face.eyeWidths[i] * width * 0.9];
-  // Face frame: origin between the eyes, "down" toward the chin, so a tilted
-  // face slims along its own axis.
-  const [l, r] = [at(face.eyes[0]), at(face.eyes[1])];
-  const origin: [number, number] = [(l[0] + r[0]) / 2, (l[1] + r[1]) / 2];
-  const chin = at(face.chin);
-  const length = Math.hypot(chin[0] - origin[0], chin[1] - origin[1]) || 1;
-  return {
-    uEyeL: eye(0),
-    uEyeR: eye(1),
-    uFaceOrigin: origin,
-    uFaceDown: [(chin[0] - origin[0]) / length, (chin[1] - origin[1]) / length],
-    uFaceHalfWidth: (face.width * width) / 2,
-    uFaceLength: length,
-  };
-}
-
 /**
  * @param width  render target width in canvas units
  * @param height render target height in canvas units
- * @param face   landmarks for the face warp (눈 크게 / 얼굴 갸름), if detected
+ * @param faceWarp face retouch warp for this render target (see services/faceWarp)
  * @param spots  잡티 제거 spots for this render target (see spotUniforms)
  * @param grainSeed stable seed so grain doesn't "boil" while editing
  */
@@ -99,7 +69,7 @@ export function buildUniforms(
   p: ResolvedProcessing,
   width: number,
   height: number,
-  face: FaceGeometry | null = null,
+  faceWarp: FaceWarpUniforms = NO_FACE_WARP,
   spots: SpotUniforms = NO_SPOTS,
   grainSeed = 13.7,
 ): Uniforms {
@@ -129,10 +99,7 @@ export function buildUniforms(
     uTone: n(t.tone),
     uGlow: Math.max(0, n(t.glow)),
     uDetail: Math.max(0, n(t.detail)),
-    // Eased (^1.35) so the low end of the sliders makes very fine changes.
-    uEyes: face ? Math.max(0, n(t.eyes)) ** 1.35 : 0,
-    uSlim: face ? Math.max(0, n(t.slim)) ** 1.35 : 0,
-    ...faceUniforms(face, width, height),
+    ...faceWarp,
     ...spots,
     uShadowTint: [...p.split.shadows],
     uHighlightTint: [...p.split.highlights],

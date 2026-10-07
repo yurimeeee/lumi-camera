@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
+import { DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
 import { aspectRatioOf } from '@/constants/crop';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
@@ -8,6 +9,8 @@ import type {
   AdjustmentKey,
   CropAspectId,
   EditState,
+  FaceRetouch,
+  FaceRetouchKey,
   Geometry,
   BlemishSpot,
   NormalizedPoint,
@@ -38,6 +41,7 @@ export function createEditState(partial?: Partial<EditState>): EditState {
     geometry: { ...DEFAULT_GEOMETRY },
     reshape: [],
     spots: [],
+    faces: {},
     dateStamp: false,
     ...partial,
   };
@@ -60,6 +64,8 @@ interface EditorActions {
   setIntensity: (value: number) => void;
   setAdjustment: (key: AdjustmentKey, value: number) => void;
   setRetouch: (key: RetouchKey, value: number) => void;
+  /** Face retouch for one detected face (live; `commit()` when the slider is released). */
+  setFaceRetouch: (faceId: string, key: FaceRetouchKey, value: number) => void;
   commit: () => void;
 
   /** 터치 보정: live while dragging; `commit()` on release (one undo step per stroke). */
@@ -76,6 +82,10 @@ interface EditorActions {
   setFilter: (id: string) => void;
   resetAdjustment: (key: AdjustmentKey) => void;
   resetRetouch: (key: RetouchKey) => void;
+  /** Clears `keys` for one face (a single control or a whole category). */
+  resetFaceRetouch: (faceId: string, keys: readonly FaceRetouchKey[]) => void;
+  /** Clears face retouch on every face. */
+  resetAllFaces: () => void;
   resetAll: () => void;
   rotate: () => void;
   flip: (axis: 'h' | 'v') => void;
@@ -124,6 +134,12 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       set((s) => ({ present: { ...s.present, adjustments: { ...s.present.adjustments, [key]: value } } })),
     setRetouch: (key, value) =>
       set((s) => ({ present: { ...s.present, retouch: { ...s.present.retouch, [key]: value } } })),
+    setFaceRetouch: (faceId, key, value) =>
+      set((s) => {
+        const prev: FaceRetouch = s.present.faces[faceId] ?? DEFAULT_FACE_RETOUCH;
+        if (prev[key] === value) return s;
+        return { present: { ...s.present, faces: { ...s.present.faces, [faceId]: { ...prev, [key]: value } } } };
+      }),
     commit: () => commitState(get().present),
 
     beginStroke: (point, radius, strength, kind) =>
@@ -160,6 +176,22 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     resetRetouch: (key) => {
       if (get().present.retouch[key] === 0) return;
       update((s) => ({ ...s, retouch: { ...s.retouch, [key]: 0 } }));
+    },
+    resetFaceRetouch: (faceId, keys) => {
+      const prev = get().present.faces[faceId];
+      if (!prev || keys.every((k) => prev[k] === 0)) return;
+      update((s) => {
+        const next: FaceRetouch = { ...prev };
+        for (const k of keys) next[k] = 0;
+        const faces = { ...s.faces };
+        if (isNeutralFace(next)) delete faces[faceId];
+        else faces[faceId] = next;
+        return { ...s, faces };
+      });
+    },
+    resetAllFaces: () => {
+      if (Object.keys(get().present.faces).length === 0) return;
+      update((s) => ({ ...s, faces: {} }));
     },
     resetAll: () =>
       update((s) =>

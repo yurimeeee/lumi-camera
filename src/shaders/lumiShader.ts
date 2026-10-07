@@ -1,6 +1,7 @@
 import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
 
 import { MAX_SPOTS } from '@/services/blemish';
+import { FACE_WARP_SKSL } from '@/services/faceWarp/shader';
 import { RESHAPE_RANGE } from '@/services/reshape';
 
 /**
@@ -19,11 +20,12 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * average restricted to that mask, so edges, eyes and hair are kept sharp.
  *
  * Face warp: with face landmarks, the sampling position is displaced before
- * anything else reads the image — a radial bulge around each eye (눈 크게)
- * and a smooth horizontal squeeze of the lower face toward its midline
- * (얼굴 갸름). Before that, the 터치 보정 displacement field (two 16-bit
- * encoded textures, see services/reshape.ts) is applied, since strokes are
- * drawn on what the user sees. Vignette and grain use the unwarped position.
+ * anything else reads the image (services/faceWarp: contour + proportion
+ * field and feature primitives), so skin retouch, colour, filter and effects
+ * all see the reshaped face. Before that, the 터치 보정 displacement field
+ * (two 16-bit encoded textures, see services/reshape.ts) is applied, since
+ * strokes are drawn on what the user sees. Vignette and grain use the
+ * unwarped position.
  */
 export const LUMI_SKSL = `
 uniform shader image;
@@ -56,16 +58,6 @@ uniform float uSmooth;
 uniform float uTone;
 uniform float uGlow;
 uniform float uDetail;
-
-uniform float uEyes;
-uniform float3 uEyeL;
-uniform float3 uEyeR;
-uniform float uSlim;
-// Face frame: origin between the eyes, unit vector toward the chin.
-uniform float2 uFaceOrigin;
-uniform float2 uFaceDown;
-uniform float uFaceHalfWidth;
-uniform float uFaceLength;
 
 // 잡티 제거: xy = centre, z = radius (render pixels).
 uniform float3 uSpots[${MAX_SPOTS}];
@@ -121,56 +113,7 @@ float3 ringBlur(float2 xy, float radius) {
   return sum / 8.0;
 }
 
-// Magnifies the disc eye.xy/eye.z; continuous (no seam) at its rim.
-// 눈 크게: magnifies an ellipse around the eye, wider along the eye line than
-// across it, so the brows and cheeks barely move. The radial profile
-// (1 − t²)² fades to nothing at the rim and stays monotonic (no folds).
-float2 bulge(float2 p, float3 eye, float s) {
-  float2 down = uFaceDown;
-  float2 across = float2(-down.y, down.x);
-  float2 d = p - eye.xy;
-  float u = dot(d, across) / (eye.z * 0.95);
-  float v = dot(d, down) / (eye.z * 0.67);
-  float t2 = u * u + v * v;
-  if (t2 >= 1.0) return p;
-  float f = 1.0 - t2;
-  return eye.xy + d * (1.0 - s * f * f);
-}
-
-// 얼굴 갸름: squeezes the lower face toward its midline. In face units
-// (s across, 1 = cheekbone; t down, 0 = eyes, 1 = chin) content is sampled
-// from s·(1 + k). k is ~0 near the midline (nose and mouth keep their shape)
-// and rises toward the contour; it fades in below the cheekbones, peaks along
-// the jaw, and fades out under the chin and outside the face, so nothing
-// creases. The chin also lifts slightly (content sampled from a little lower),
-// so the narrower face keeps its proportions instead of looking long. Both
-// mappings stay monotonic (no folds) at these strengths.
-float2 slim(float2 p) {
-  float2 down = uFaceDown;
-  float2 across = float2(-down.y, down.x);
-  float2 d = p - uFaceOrigin;
-  float s = dot(d, across) / uFaceHalfWidth;
-  float t = dot(d, down) / uFaceLength;
-  float wt = smoothstep(0.15, 0.7, t) * (1.0 - smoothstep(1.0, 1.4, t));
-  float ws = smoothstep(0.2, 0.85, abs(s)) * (1.0 - smoothstep(0.95, 1.75, abs(s)));
-  float k = uSlim * 0.11 * wt * ws;
-  // V-line: lift the chin and lower jaw by up to ~3.5 % of the face length.
-  float lift = uSlim * 0.035 * smoothstep(0.55, 1.0, t) * (1.0 - smoothstep(1.05, 1.5, t))
-             * (1.0 - smoothstep(0.9, 1.5, abs(s)));
-  return p + across * (s * k * uFaceHalfWidth) + down * (lift * uFaceLength);
-}
-
-float2 faceWarp(float2 p) {
-  if (uSlim > 0.0 && uFaceHalfWidth > 0.0) {
-    p = slim(p);
-  }
-  if (uEyes > 0.0 && uEyeL.z > 0.0) {
-    p = bulge(p, uEyeL, uEyes * 0.22);
-    p = bulge(p, uEyeR, uEyes * 0.22);
-  }
-  return p;
-}
-
+${FACE_WARP_SKSL}
 float decode16(half4 c) {
   return (float(c.r) * 65280.0 + float(c.g) * 255.0) / 65535.0;
 }

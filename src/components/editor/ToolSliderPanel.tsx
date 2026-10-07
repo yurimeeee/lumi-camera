@@ -18,10 +18,12 @@ interface Props<K extends string> {
   footer?: ReactNode;
   /** Hint under the tools; may depend on the selected tool. */
   note?: string | ((key: K) => string | undefined);
+  /** Greys out the slider and tool values (e.g. face tools without a face). */
+  disabled?: boolean;
 }
 
 /** Icon strip of tools + one slider for the selected tool, with per-tool reset. */
-export function ToolSliderPanel<K extends string>({ tools, values, onChange, onCommit, onReset, footer, note }: Props<K>) {
+export function ToolSliderPanel<K extends string>({ tools, values, onChange, onCommit, onReset, footer, note, disabled = false }: Props<K>) {
   const [active, setActive] = useState<K>(tools[0]!.key);
   const spec = tools.find((t) => t.key === active) ?? tools[0]!;
   const value = values[spec.key];
@@ -31,7 +33,7 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
     <View>
       <View style={styles.sliderRow}>
         <Text style={styles.toolName}>{spec.label}</Text>
-        <View style={styles.slider}>
+        <View style={[styles.slider, disabled && styles.disabled]}>
           <SliderControl
             value={value}
             min={spec.min}
@@ -44,8 +46,8 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
         </View>
         <PressableScale
           onPress={() => onReset(spec.key)}
-          disabled={value === 0}
-          style={[styles.reset, value === 0 && styles.resetDisabled]}
+          disabled={disabled || value === 0}
+          style={[styles.reset, (disabled || value === 0) && styles.resetDisabled]}
           accessibilityRole="button"
           accessibilityLabel={`${spec.label} 초기화`}
         >
@@ -69,7 +71,7 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
               accessibilityLabel={`${t.label} ${values[t.key]}`}
               accessibilityState={{ selected }}
             >
-              <View style={[styles.toolIcon, selected && styles.toolIconSelected]}>
+              <View style={[styles.toolIcon, selected && styles.toolIconSelected, disabled && styles.disabled]}>
                 <Ionicons name={t.icon} size={20} color={selected ? colors.text : colors.textSecondary} />
               </View>
               <Text style={[styles.toolLabel, selected && styles.toolLabelSelected]} numberOfLines={1}>
@@ -102,6 +104,10 @@ const styles = StyleSheet.create({
   },
   slider: {
     flex: 1,
+  },
+  disabled: {
+    opacity: 0.35,
+    pointerEvents: 'none',
   },
   reset: {
     width: 44,

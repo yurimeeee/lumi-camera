@@ -11,7 +11,10 @@ import type { DateFormat } from '@/types/settings';
 import { formatDateStamp } from '@/utils/dateStamp';
 
 import { withExif } from './exif';
-import { detectFace } from './faceLandmarks';
+import { hasFaceEdits } from '@/constants/faceRetouch';
+
+import { detectFaces } from './faceDetection/FaceDetector';
+import { buildFaceWarp, faceWarpUniforms, prepareFaceInputs } from './faceWarp/FaceWarpEngine';
 import { applyGeometry, EXPORT_MAX_SIDE_HQ, EXPORT_MAX_SIDE_STD, type ImageFile } from './imagePipeline';
 import { buildUniforms, isIdentity, resolveProcessing } from './imageProcessing';
 import { spotUniforms } from './blemish';
@@ -51,7 +54,8 @@ function writeJpeg(bytes: Uint8Array, prefix: string): string {
 
 /**
  * Renders the final edited photo at export resolution:
- * geometry (native) → Lumi shader + date stamp (Skia, offscreen) → JPEG + EXIF.
+ * geometry (native) → Lumi shader (face warp → skin → colour → filter →
+ * effects) + date stamp (Skia, offscreen) → JPEG + EXIF.
  */
 export async function renderEdit(source: SourceImage, edit: EditState, opts: ExportOptions): Promise<ImageFile> {
   const maxSide = opts.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD;
@@ -68,17 +72,24 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
     adjustments: edit.adjustments,
     retouch: edit.retouch,
   });
-  // Landmarks are re-detected on the export image: its geometry can differ
-  // from the preview's (e.g. saving while the crop tool shows the full frame).
-  const reshapes = edit.retouch.eyes > 0 || edit.retouch.slim > 0;
-  const face = reshapes ? await detectFace(base.uri).catch(() => null) : null;
+  // Face retouch: the same source landmarks the preview used (cached per
+  // image), mapped through this export's geometry and evaluated at full
+  // resolution — never a screenshot of the preview.
+  const faces = hasFaceEdits(edit.faces) ? await detectFaces(source).catch(() => []) : [];
+  const facePlan = buildFaceWarp(prepareFaceInputs(faces, edit.faces, edit.geometry), width, height);
   const reshape = edit.reshape.length
     ? buildReshapeField(edit.reshape, edit.geometry, source.width, source.height).toTextures()
     : null;
   const uniforms =
-    isIdentity(processing) && !reshape && edit.spots.length === 0
+    isIdentity(processing) && !reshape && edit.spots.length === 0 && !facePlan
       ? null
-      : buildUniforms(processing, width, height, face, spotUniforms(edit.spots, edit.geometry, source, width, height));
+      : buildUniforms(
+          processing,
+          width,
+          height,
+          faceWarpUniforms(facePlan),
+          spotUniforms(edit.spots, edit.geometry, source, width, height),
+        );
   const stamp =
     edit.dateStamp && opts.stampTypeface ? formatDateStamp(source.takenAt, opts.dateFormat) : null;
 

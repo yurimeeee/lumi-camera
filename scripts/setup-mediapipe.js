@@ -3,7 +3,7 @@
  * Copies MediaPipe's vision bundle and WASM runtime into `public/mediapipe/`
  * so the web build serves the exact version that is installed. The bundle is
  * loaded by the browser directly, not through Metro, which cannot transform
- * its dynamic `import(url)` (see faceLandmarks.web.ts).
+ * its dynamic `import(url)` (see src/services/faceDetection/backend.web.ts).
  */
 const fs = require('fs');
 const path = require('path');
