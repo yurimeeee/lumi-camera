@@ -3,7 +3,8 @@ import { Gesture } from 'react-native-gesture-handler';
 import {
   useAnimatedReaction,
   useSharedValue,
-  withTiming,
+  withDecay,
+  withSpring,
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -41,6 +42,25 @@ function clampOffset(t: number, size: number, scale: number) {
   return Math.min(0, Math.max(size - size * scale, t));
 }
 
+/** Rubber band past an edge: follows the finger with growing resistance (iOS-style). */
+function rubber(v: number, min: number, max: number, dim: number) {
+  'worklet';
+  const band = (over: number) => (1 - 1 / ((over * 0.55) / dim + 1)) * dim;
+  if (v < min) return min - band(min - v);
+  if (v > max) return max + band(v - max);
+  return v;
+}
+
+/** Scale past 1× or MAX_ZOOM resists instead of stopping dead. */
+function softScale(s: number) {
+  'worklet';
+  if (s < 1) return 1 - (1 - s) * 0.35;
+  if (s > MAX_ZOOM) return MAX_ZOOM + (s - MAX_ZOOM) * 0.25;
+  return s;
+}
+
+const SPRING = { damping: 24, stiffness: 240, mass: 0.7 };
+
 export function useZoom(
   width: number,
   height: number,
@@ -53,6 +73,8 @@ export function useZoom(
   const x = useSharedValue(0);
   const y = useSharedValue(0);
   const start = useSharedValue({ scale: 1, x: 0, y: 0, fx: 0, fy: 0 });
+  /** Last pinch focal point (photo-view coords), to settle around it. */
+  const focal = useSharedValue({ x: 0, y: 0 });
   const [zoomed, setZoomed] = useState(false);
 
   useAnimatedReaction(
@@ -76,12 +98,27 @@ export function useZoom(
     y.set(clampOffset(ty, height, s));
   };
 
+  /** Follows the gesture, rubber-banding past the edges instead of clamping. */
+  const follow = (s: number, tx: number, ty: number) => {
+    'worklet';
+    scale.set(s);
+    x.set(rubber(tx, width - width * Math.max(1, s), 0, width));
+    y.set(rubber(ty, height - height * Math.max(1, s), 0, height));
+  };
+
   const animateTo = (s: number, tx: number, ty: number) => {
     'worklet';
-    const config = { duration: 220 };
-    scale.set(withTiming(s, config));
-    x.set(withTiming(clampOffset(tx, width, s), config));
-    y.set(withTiming(clampOffset(ty, height, s), config));
+    scale.set(withSpring(s, SPRING));
+    x.set(withSpring(clampOffset(tx, width, s), SPRING));
+    y.set(withSpring(clampOffset(ty, height, s), SPRING));
+  };
+
+  /** Springs back inside the limits, keeping the point under `focal` in place. */
+  const settle = (fx: number, fy: number) => {
+    'worklet';
+    const s0 = scale.value;
+    const s = Math.min(MAX_ZOOM, Math.max(1, s0));
+    animateTo(s, fx - ((fx - x.value) / s0) * s, fy - ((fy - y.value) / s0) * s);
   };
 
   const pinch = Gesture.Pinch()
@@ -92,12 +129,16 @@ export function useZoom(
     })
     .onUpdate((e) => {
       const st = start.value;
-      const s = Math.min(MAX_ZOOM, Math.max(1, st.scale * e.scale));
+      const s = softScale(st.scale * e.scale);
       // Keep the photo point that was under the fingers under the fingers.
       const px = (st.fx - st.x) / st.scale;
       const py = (st.fy - st.y) / st.scale;
-      apply(s, e.focalX - ox - px * s, e.focalY - oy - py * s);
-    });
+      const fx = e.focalX - ox;
+      const fy = e.focalY - oy;
+      focal.set({ x: fx, y: fy });
+      follow(s, fx - px * s, fy - py * s);
+    })
+    .onEnd(() => settle(focal.value.x, focal.value.y));
 
   const pan = Gesture.Pan()
     .enabled(enabled)
@@ -109,7 +150,14 @@ export function useZoom(
     .onUpdate((e) => {
       if (scale.value <= 1) return;
       const st = start.value;
-      apply(scale.value, st.x + e.translationX, st.y + e.translationY);
+      follow(scale.value, st.x + e.translationX, st.y + e.translationY);
+    })
+    .onEnd((e) => {
+      if (scale.value <= 1) return;
+      // Glide on with the finger's speed, bouncing softly off the edges.
+      const s = scale.value;
+      x.set(withDecay({ velocity: e.velocityX, clamp: [width - width * s, 0], rubberBandEffect: true }));
+      y.set(withDecay({ velocity: e.velocityY, clamp: [height - height * s, 0], rubberBandEffect: true }));
     });
 
   const doubleTap = Gesture.Tap()

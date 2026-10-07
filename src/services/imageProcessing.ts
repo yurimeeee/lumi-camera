@@ -70,7 +70,7 @@ function faceUniforms(face: FaceGeometry | null, width: number, height: number) 
     };
   }
   const at = (pt: { x: number; y: number }): [number, number] => [pt.x * width, pt.y * height];
-  // The eye disc reaches past the lids so the bulge fades out on the skin.
+  // The eye ellipse reaches past the lids so the bulge fades out on the skin.
   const eye = (i: 0 | 1): [number, number, number] => [...at(face.eyes[i]), face.eyeWidths[i] * width * 0.9];
   // Face frame: origin between the eyes, "down" toward the chin, so a tilted
   // face slims along its own axis.

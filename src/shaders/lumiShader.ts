@@ -122,20 +122,27 @@ float3 ringBlur(float2 xy, float radius) {
 }
 
 // Magnifies the disc eye.xy/eye.z; continuous (no seam) at its rim.
+// 눈 크게: magnifies an ellipse around the eye, wider along the eye line than
+// across it, so the brows and cheeks barely move. The radial profile
+// (1 − t²)² fades to nothing at the rim and stays monotonic (no folds).
 float2 bulge(float2 p, float3 eye, float s) {
+  float2 down = uFaceDown;
+  float2 across = float2(-down.y, down.x);
   float2 d = p - eye.xy;
-  float r2 = eye.z * eye.z;
-  float d2 = dot(d, d);
-  if (d2 >= r2) return p;
-  return eye.xy + d * (1.0 - s * (1.0 - d2 / r2));
+  float u = dot(d, across) / (eye.z * 0.95);
+  float v = dot(d, down) / (eye.z * 0.67);
+  float t2 = u * u + v * v;
+  if (t2 >= 1.0) return p;
+  float f = 1.0 - t2;
+  return eye.xy + d * (1.0 - s * f * f);
 }
 
 // 얼굴 갸름: squeezes the lower face toward its midline. In face units
 // (s across, 1 = cheekbone; t down, 0 = eyes, 1 = chin) content is sampled
-// from s·(1 + k), so the contour moves in while the nose and mouth near the
-// midline barely move. k fades in below the cheekbones, peaks along the jaw,
-// fades out under the chin and outside the face, so nothing creases. The
-// mapping stays monotonic (no folds) for k well under 0.3.
+// from s·(1 + k). k is ~0 near the midline (nose and mouth keep their shape)
+// and rises toward the contour; it fades in below the cheekbones, peaks along
+// the jaw, and fades out under the chin and outside the face, so nothing
+// creases. The mapping stays monotonic (no folds) for k well under 0.3.
 float2 slim(float2 p) {
   float2 down = uFaceDown;
   float2 across = float2(-down.y, down.x);
@@ -143,8 +150,8 @@ float2 slim(float2 p) {
   float s = dot(d, across) / uFaceHalfWidth;
   float t = dot(d, down) / uFaceLength;
   float wt = smoothstep(0.15, 0.7, t) * (1.0 - smoothstep(1.0, 1.4, t));
-  float ws = 1.0 - smoothstep(0.95, 1.75, abs(s));
-  float k = uSlim * 0.1 * wt * ws;
+  float ws = smoothstep(0.2, 0.85, abs(s)) * (1.0 - smoothstep(0.95, 1.75, abs(s)));
+  float k = uSlim * 0.11 * wt * ws;
   return p + across * (s * k * uFaceHalfWidth);
 }
 
@@ -153,8 +160,8 @@ float2 faceWarp(float2 p) {
     p = slim(p);
   }
   if (uEyes > 0.0 && uEyeL.z > 0.0) {
-    p = bulge(p, uEyeL, uEyes * 0.3);
-    p = bulge(p, uEyeR, uEyes * 0.3);
+    p = bulge(p, uEyeL, uEyes * 0.22);
+    p = bulge(p, uEyeR, uEyes * 0.22);
   }
   return p;
 }
@@ -178,7 +185,9 @@ float3 blur4(float2 p, float r) {
 // the side the pixel is on; ring samples darker than the ring's average (the
 // blemish leaking past a too-small circle) count less.
 // Texture: fine detail from whichever of 8 nearby patches best matches the
-// ring tone, so pores carry over but brows, lips or creases don't.
+// ring tone, so pores carry over but brows, lips or creases don't; its
+// strength is matched to the skin texture around the spot, so the patch is
+// neither grainier nor smoother than its surroundings.
 // Mask: feathered to the rim, and a little past it wherever the pixel still
 // differs from the fill (a slightly off-centre tap leaves no halo).
 float3 heal(float2 p, float3 c) {
@@ -191,12 +200,17 @@ float3 heal(float2 p, float3 c) {
 
     float3 ring[12];
     float3 mean = float3(0.0);
+    float ringTex = 0.0;
     for (int k = 0; k < 12; k++) {
       float a = float(k) * 0.5235988;
-      ring[k] = blur4(spot.xy + float2(cos(a), sin(a)) * r * 1.3, r * 0.3);
+      float2 q = spot.xy + float2(cos(a), sin(a)) * r * 1.3;
+      ring[k] = blur4(q, r * 0.3);
       mean += ring[k];
+      float3 hi = image.eval(q).rgb - ring[k];
+      ringTex += dot(hi, hi);
     }
     mean /= 12.0;
+    ringTex /= 12.0;
     float lm = luma(mean);
     float3 sum = float3(0.0);
     float wsum = 0.0;
@@ -222,8 +236,17 @@ float3 heal(float2 p, float3 c) {
         offset = o;
       }
     }
+    float donorTex = 0.0;
+    for (int k = 0; k < 4; k++) {
+      float a = float(k) * 1.5707963 + 0.7853982;
+      float2 q = spot.xy + offset + float2(cos(a), sin(a)) * r * 0.6;
+      float3 hi = image.eval(q).rgb - blur4(q, r * 0.3);
+      donorTex += dot(hi, hi);
+    }
+    donorTex /= 4.0;
+    float texGain = clamp(sqrt(ringTex / max(donorTex, 1e-6)), 0.5, 1.5);
     float2 donor = p + offset;
-    float3 grain = image.eval(donor).rgb - blur4(donor, max(r * 0.3, 1.0));
+    float3 grain = (image.eval(donor).rgb - blur4(donor, max(r * 0.3, 1.0))) * texGain;
     float3 fill = tone + grain;
 
     float t = dist / r;

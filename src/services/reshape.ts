@@ -204,14 +204,19 @@ export class ReshapeField {
     return top * (1 - ty) + bottom * ty;
   }
 
-  /** Encodes the field as two opaque RGBA8 images: R = high byte, G = low byte. */
+  /**
+   * Encodes the field as two opaque RGBA8 images: R = high byte, G = low byte.
+   * A light [1 4 6 4 1] blur first irons out the small kinks where strokes
+   * overlap, so pushed areas bend smoothly (the preview and export share it).
+   */
   toTextures(): ReshapeTextures | null {
     const n = this.gw * this.gh;
+    const smooth = smoothField(this.d, this.gw, this.gh);
     const xs = new Uint8Array(n * 4);
     const ys = new Uint8Array(n * 4);
     for (let k = 0; k < n; k++) {
-      encode(xs, k, this.d[k * 2]! / this.gw);
-      encode(ys, k, this.d[k * 2 + 1]! / this.gh);
+      encode(xs, k, smooth[k * 2]! / this.gw);
+      encode(ys, k, smooth[k * 2 + 1]! / this.gh);
     }
     const x = makeImage(xs, this.gw, this.gh);
     const y = makeImage(ys, this.gw, this.gh);
@@ -227,6 +232,41 @@ export class ReshapeField {
 export interface ReshapeTextures {
   x: SkImage;
   y: SkImage;
+}
+
+const KERNEL = [1 / 16, 4 / 16, 6 / 16, 4 / 16, 1 / 16];
+
+/** Separable binomial blur of an interleaved (dx, dy) grid, edges clamped. */
+function smoothField(d: Float32Array, gw: number, gh: number): Float32Array {
+  const tmp = new Float32Array(d.length);
+  const out = new Float32Array(d.length);
+  for (let j = 0; j < gh; j++) {
+    for (let i = 0; i < gw; i++) {
+      let sx = 0;
+      let sy = 0;
+      for (let t = -2; t <= 2; t++) {
+        const k = (j * gw + Math.min(gw - 1, Math.max(0, i + t))) * 2;
+        sx += d[k]! * KERNEL[t + 2]!;
+        sy += d[k + 1]! * KERNEL[t + 2]!;
+      }
+      tmp[(j * gw + i) * 2] = sx;
+      tmp[(j * gw + i) * 2 + 1] = sy;
+    }
+  }
+  for (let j = 0; j < gh; j++) {
+    for (let i = 0; i < gw; i++) {
+      let sx = 0;
+      let sy = 0;
+      for (let t = -2; t <= 2; t++) {
+        const k = (Math.min(gh - 1, Math.max(0, j + t)) * gw + i) * 2;
+        sx += tmp[k]! * KERNEL[t + 2]!;
+        sy += tmp[k + 1]! * KERNEL[t + 2]!;
+      }
+      out[(j * gw + i) * 2] = sx;
+      out[(j * gw + i) * 2 + 1] = sy;
+    }
+  }
+  return out;
 }
 
 function clamp(v: number, min: number, max: number) {
