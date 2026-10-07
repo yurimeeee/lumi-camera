@@ -129,8 +129,9 @@ export function buildUniforms(
     uTone: n(t.tone),
     uGlow: Math.max(0, n(t.glow)),
     uDetail: Math.max(0, n(t.detail)),
-    uEyes: face ? Math.max(0, n(t.eyes)) : 0,
-    uSlim: face ? Math.max(0, n(t.slim)) : 0,
+    // Eased (^1.35) so the low end of the sliders makes very fine changes.
+    uEyes: face ? Math.max(0, n(t.eyes)) ** 1.35 : 0,
+    uSlim: face ? Math.max(0, n(t.slim)) ** 1.35 : 0,
     ...faceUniforms(face, width, height),
     ...spots,
     uShadowTint: [...p.split.shadows],

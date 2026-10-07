@@ -142,7 +142,9 @@ float2 bulge(float2 p, float3 eye, float s) {
 // from s·(1 + k). k is ~0 near the midline (nose and mouth keep their shape)
 // and rises toward the contour; it fades in below the cheekbones, peaks along
 // the jaw, and fades out under the chin and outside the face, so nothing
-// creases. The mapping stays monotonic (no folds) for k well under 0.3.
+// creases. The chin also lifts slightly (content sampled from a little lower),
+// so the narrower face keeps its proportions instead of looking long. Both
+// mappings stay monotonic (no folds) at these strengths.
 float2 slim(float2 p) {
   float2 down = uFaceDown;
   float2 across = float2(-down.y, down.x);
@@ -152,7 +154,10 @@ float2 slim(float2 p) {
   float wt = smoothstep(0.15, 0.7, t) * (1.0 - smoothstep(1.0, 1.4, t));
   float ws = smoothstep(0.2, 0.85, abs(s)) * (1.0 - smoothstep(0.95, 1.75, abs(s)));
   float k = uSlim * 0.11 * wt * ws;
-  return p + across * (s * k * uFaceHalfWidth);
+  // V-line: lift the chin and lower jaw by up to ~3.5 % of the face length.
+  float lift = uSlim * 0.035 * smoothstep(0.55, 1.0, t) * (1.0 - smoothstep(1.05, 1.5, t))
+             * (1.0 - smoothstep(0.9, 1.5, abs(s)));
+  return p + across * (s * k * uFaceHalfWidth) + down * (lift * uFaceLength);
 }
 
 float2 faceWarp(float2 p) {
@@ -180,16 +185,15 @@ float3 blur4(float2 p, float r) {
           image.eval(p + float2(0.0, r)).rgb + image.eval(p - float2(0.0, r)).rgb) * 0.25;
 }
 
-// 잡티 제거 (frequency-separated heal).
-// Tone: a ring of softly blurred skin just outside the spot, weighted toward
-// the side the pixel is on; ring samples darker than the ring's average (the
-// blemish leaking past a too-small circle) count less.
-// Texture: fine detail from whichever of 8 nearby patches best matches the
-// ring tone, so pores carry over but brows, lips or creases don't; its
-// strength is matched to the skin texture around the spot, so the patch is
-// neither grainier nor smoother than its surroundings.
-// Mask: feathered to the rim, and a little past it wherever the pixel still
-// differs from the fill (a slightly off-centre tap leaves no halo).
+// 잡티 제거 (healing brush). A nearby patch of skin (the donor) is copied
+// whole, so pores and fine shading stay intact, and the colour difference
+// between the spot's surroundings and the donor's surroundings is blended in
+// from the rim (a membrane interpolation), so the copy meets the spot's edge
+// seamlessly. The donor is the nearby patch that best matches the spot's
+// surroundings in tone while being flat (no brows, lips or creases). Ring
+// samples darker than the ring average (blemish leaking past a too-small
+// circle) count less. Feathered to the rim, and a little past it wherever the
+// pixel still differs from its surroundings (an off-centre tap leaves no halo).
 float3 heal(float2 p, float3 c) {
   for (int i = 0; i < ${MAX_SPOTS}; i++) {
     if (float(i) >= uSpotCount) break;
@@ -200,54 +204,54 @@ float3 heal(float2 p, float3 c) {
 
     float3 ring[12];
     float3 mean = float3(0.0);
-    float ringTex = 0.0;
     for (int k = 0; k < 12; k++) {
       float a = float(k) * 0.5235988;
-      float2 q = spot.xy + float2(cos(a), sin(a)) * r * 1.3;
-      ring[k] = blur4(q, r * 0.3);
+      ring[k] = blur4(spot.xy + float2(cos(a), sin(a)) * r * 1.3, r * 0.3);
       mean += ring[k];
-      float3 hi = image.eval(q).rgb - ring[k];
-      ringTex += dot(hi, hi);
     }
     mean /= 12.0;
-    ringTex /= 12.0;
     float lm = luma(mean);
-    float3 sum = float3(0.0);
-    float wsum = 0.0;
-    for (int k = 0; k < 12; k++) {
-      float a = float(k) * 0.5235988;
-      float2 q = spot.xy + float2(cos(a), sin(a)) * r * 1.3;
-      float dark = max(0.0, lm - luma(ring[k]));
-      float w = exp(-dark * dark * 400.0) / pow(0.15 * r + length(p - q), 2.0);
-      sum += ring[k] * w;
-      wsum += w;
-    }
-    float3 tone = sum / wsum;
 
-    float2 offset = float2(r * 2.2, 0.0);
+    // Donor: 8 candidates around the spot, scored by tone match + flatness.
+    float2 offset = float2(r * 2.4, 0.0);
     float bestErr = 1e9;
     for (int k = 0; k < 8; k++) {
       float a = float(k) * 0.7853982;
-      float2 o = float2(cos(a), sin(a)) * r * 2.2;
-      float3 d = blur4(spot.xy + o, r * 0.6) - tone;
-      float err = dot(d, d);
+      float2 o = float2(cos(a), sin(a)) * r * 2.4;
+      float3 m4 = float3(0.0);
+      float3 sq = float3(0.0);
+      for (int j = 0; j < 4; j++) {
+        float b = float(j) * 1.5707963;
+        float3 v = blur4(spot.xy + o + float2(cos(b), sin(b)) * r * 0.9, r * 0.3);
+        m4 += v;
+        sq += v * v;
+      }
+      m4 *= 0.25;
+      float3 var = max(sq * 0.25 - m4 * m4, float3(0.0));
+      float3 d = m4 - mean;
+      float err = dot(d, d) + 2.0 * (var.r + var.g + var.b);
       if (err < bestErr) {
         bestErr = err;
         offset = o;
       }
     }
-    float donorTex = 0.0;
-    for (int k = 0; k < 4; k++) {
-      float a = float(k) * 1.5707963 + 0.7853982;
-      float2 q = spot.xy + offset + float2(cos(a), sin(a)) * r * 0.6;
-      float3 hi = image.eval(q).rgb - blur4(q, r * 0.3);
-      donorTex += dot(hi, hi);
+
+    float3 diff = float3(0.0);
+    float3 tone = float3(0.0);
+    float wsum = 0.0;
+    for (int k = 0; k < 12; k++) {
+      float a = float(k) * 0.5235988;
+      float2 q = spot.xy + float2(cos(a), sin(a)) * r * 1.3;
+      float3 donorRing = blur4(q + offset, r * 0.3);
+      float dark = max(0.0, lm - luma(ring[k]));
+      float w = exp(-dark * dark * 400.0) / pow(0.15 * r + length(p - q), 2.0);
+      diff += (ring[k] - donorRing) * w;
+      tone += ring[k] * w;
+      wsum += w;
     }
-    donorTex /= 4.0;
-    float texGain = clamp(sqrt(ringTex / max(donorTex, 1e-6)), 0.5, 1.5);
-    float2 donor = p + offset;
-    float3 grain = (image.eval(donor).rgb - blur4(donor, max(r * 0.3, 1.0))) * texGain;
-    float3 fill = tone + grain;
+    diff /= wsum;
+    tone /= wsum;
+    float3 fill = image.eval(p + offset).rgb + diff;
 
     float t = dist / r;
     float m = 1.0 - smoothstep(0.7, 1.0, t);

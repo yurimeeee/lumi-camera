@@ -93,6 +93,8 @@ export interface ReshapeStroke {
   radius: number;
   /** Share of the finger's travel the content follows (0…1). */
   strength: number;
+  /** push moves content along the drag; restore eases it back toward the original. */
+  kind: 'push' | 'restore';
   points: readonly NormalizedPoint[];
 }
 

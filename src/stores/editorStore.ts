@@ -63,7 +63,7 @@ interface EditorActions {
   commit: () => void;
 
   /** 터치 보정: live while dragging; `commit()` on release (one undo step per stroke). */
-  beginStroke: (point: NormalizedPoint, radius: number, strength: number) => void;
+  beginStroke: (point: NormalizedPoint, radius: number, strength: number, kind: ReshapeStroke['kind']) => void;
   extendStroke: (point: NormalizedPoint) => void;
   /** Drops the live (uncommitted) stroke, e.g. when a second finger starts a pinch. */
   cancelStroke: () => void;
@@ -126,9 +126,9 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       set((s) => ({ present: { ...s.present, retouch: { ...s.present.retouch, [key]: value } } })),
     commit: () => commitState(get().present),
 
-    beginStroke: (point, radius, strength) =>
+    beginStroke: (point, radius, strength, kind) =>
       set((s) => ({
-        present: { ...s.present, reshape: [...s.present.reshape, { id: nextStrokeId++, radius, strength, points: [point] }] },
+        present: { ...s.present, reshape: [...s.present.reshape, { id: nextStrokeId++, radius, strength, kind, points: [point] }] },
       })),
     extendStroke: (point) =>
       set((s) => {

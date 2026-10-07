@@ -144,11 +144,11 @@ export function RetouchPanel({ faceStatus }: { faceStatus: FaceStatus }) {
   );
 }
 
-export type TouchMode = 'push' | 'spot';
+export type TouchMode = 'push' | 'restore' | 'spot';
 
 export interface BrushSettings {
   mode: TouchMode;
-  /** 밀기 brush size, 0…100 */
+  /** 밀기 / 복원 brush size, 0…100 */
   size: number;
   /** 밀기 strength, 0…100 */
   strength: number;
@@ -156,21 +156,29 @@ export interface BrushSettings {
   spotSize: number;
 }
 
-export const DEFAULT_BRUSH: BrushSettings = { mode: 'push', size: 45, strength: 40, spotSize: 20 };
+export const DEFAULT_BRUSH: BrushSettings = { mode: 'push', size: 35, strength: 40, spotSize: 20 };
 
 /**
- * Panel sliders → brush. 밀기: radius 3…15 % of the short side, content
+ * Panel sliders → brush. 밀기 / 복원: radius 3…25 % of the short side (a big
+ * soft brush spreads the same change wider, so less bending); 밀기 content
  * follows 4…30 % of the finger. 잡티: radius 0.5…3.5 %.
  */
 export function toBrush({ mode, size, strength, spotSize }: BrushSettings): Brush {
   if (mode === 'spot') return { mode, radius: 0.005 + (spotSize / 100) * 0.03, strength: 0 };
-  return { mode, radius: 0.03 + (size / 100) * 0.12, strength: 0.04 + (strength / 100) * 0.26 };
+  return { mode, radius: 0.03 + (size / 100) * 0.22, strength: 0.04 + (strength / 100) * 0.26 };
 }
 
 const TOUCH_MODES = [
   { value: 'push', label: '밀기' },
+  { value: 'restore', label: '복원' },
   { value: 'spot', label: '잡티 제거' },
 ] as const;
+
+const TOUCH_HINT: Record<TouchMode, string> = {
+  push: '브러시를 넉넉하게 키우고 짧게 여러 번 밀면 자연스러워요.\n과하게 밀린 곳은 복원으로 살짝 문질러 주세요.',
+  restore: '문지른 곳이 조금씩 원래 모습으로 돌아와요.\n밀기가 과한 부분만 살살 문질러 주세요.',
+  spot: '잡티보다 조금 크게 맞추고 톡 눌러 주세요.\n주변 피부결로 자연스럽게 채워져요.',
+};
 
 export function TouchPanel({ brush, onChange }: { brush: BrushSettings; onChange: (b: BrushSettings) => void }) {
   const strokes = useEditorStore((s) => s.present.reshape.length);
@@ -216,33 +224,25 @@ export function TouchPanel({ brush, onChange }: { brush: BrushSettings; onChange
             accessibilityLabel="브러시 크기"
           />
         </View>
-        {spot ? trash : <View style={styles.trashSpacer} />}
+        {brush.mode === 'push' ? <View style={styles.trashSpacer} /> : trash}
       </View>
-      {spot ? (
-        <Text style={styles.reshapeHint}>
-          잡티보다 조금 크게 맞추고 톡 눌러 주세요.{'\n'}주변 피부결로 자연스럽게 채워져요.
-        </Text>
-      ) : (
-        <>
-          <View style={styles.intensityRow}>
-            <Text style={styles.filterName}>강도</Text>
-            <View style={styles.flex}>
-              <SliderControl
-                value={brush.strength}
-                min={0}
-                max={100}
-                onChange={(strength) => onChange({ ...brush, strength })}
-                resetValue={DEFAULT_BRUSH.strength}
-                accessibilityLabel="브러시 강도"
-              />
-            </View>
-            {trash}
+      {brush.mode === 'push' ? (
+        <View style={styles.intensityRow}>
+          <Text style={styles.filterName}>강도</Text>
+          <View style={styles.flex}>
+            <SliderControl
+              value={brush.strength}
+              min={0}
+              max={100}
+              onChange={(strength) => onChange({ ...brush, strength })}
+              resetValue={DEFAULT_BRUSH.strength}
+              accessibilityLabel="브러시 강도"
+            />
           </View>
-          <Text style={styles.reshapeHint}>
-            브러시를 넉넉하게 키우고 짧게 여러 번 밀면 자연스러워요.{'\n'}턱선·볼은 바깥에서 안쪽으로 조금씩 밀어 주세요.
-          </Text>
-        </>
-      )}
+          {trash}
+        </View>
+      ) : null}
+      <Text style={styles.reshapeHint}>{TOUCH_HINT[brush.mode]}</Text>
     </View>
   );
 }

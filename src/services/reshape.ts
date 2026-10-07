@@ -66,6 +66,8 @@ const STEP = 0.15;
  * skin texture still reads as natural.
  */
 const MAX_TRAVEL = 0.12;
+/** How much of the displacement under the brush centre one 복원 step removes. */
+const RESTORE_RATE = 0.12;
 
 export class ReshapeField {
   readonly gw: number;
@@ -101,6 +103,10 @@ export class ReshapeField {
   /** Replays `stroke`'s segments ending at point `from` onward (0 = whole stroke). */
   addStroke(stroke: ReshapeStroke, from = 0) {
     const r = (stroke.radius * this.srcShort) / this.cell;
+    if (stroke.kind === 'restore') {
+      this.restoreStroke(stroke, from, r);
+      return;
+    }
     let moved = from > 0 ? (this.travel.get(stroke.id) ?? 0) : 0;
     for (let i = Math.max(1, from); i < stroke.points.length; i++) {
       const a = this.toCell(stroke.points[i - 1]!);
@@ -114,6 +120,42 @@ export class ReshapeField {
       this.pushSegment(a.x, a.y, b.x, b.y, amount, r);
     }
     this.travel.set(stroke.id, moved);
+  }
+
+  /** 복원: rubbing eases the displacement under the brush back toward zero. */
+  private restoreStroke(stroke: ReshapeStroke, from: number, r: number) {
+    if (from === 0 && stroke.points[0]) {
+      const a = this.toCell(stroke.points[0]);
+      this.restoreStep(a.x, a.y, r);
+    }
+    for (let i = Math.max(1, from); i < stroke.points.length; i++) {
+      const a = this.toCell(stroke.points[i - 1]!);
+      const b = this.toCell(stroke.points[i]!);
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (r * STEP)));
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        this.restoreStep(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, r);
+      }
+    }
+  }
+
+  private restoreStep(cx: number, cy: number, r: number) {
+    const { gw, gh, d } = this;
+    const r2 = r * r;
+    const i0 = Math.max(0, Math.floor(cx - r));
+    const i1 = Math.min(gw - 1, Math.ceil(cx + r));
+    const j0 = Math.max(0, Math.floor(cy - r));
+    const j1 = Math.min(gh - 1, Math.ceil(cy + r));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const t2 = ((i + 0.5 - cx) ** 2 + (j + 0.5 - cy) ** 2) / r2;
+        if (t2 >= 1) continue;
+        const keep = 1 - RESTORE_RATE * (1 - t2) * (1 - t2);
+        const k = (j * gw + i) * 2;
+        d[k] = d[k]! * keep;
+        d[k + 1] = d[k + 1]! * keep;
+      }
+    }
   }
 
   private toCell(pt: NormalizedPoint) {

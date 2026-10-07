@@ -48,8 +48,8 @@ interface Props {
 }
 
 export interface Brush {
-  /** push = 밀기 (drag), spot = 잡티 제거 (tap). */
-  mode: 'push' | 'spot';
+  /** push = 밀기 (drag), restore = 복원 (drag), spot = 잡티 제거 (tap). */
+  mode: 'push' | 'restore' | 'spot';
   /** Radius as a fraction of the photo's short side. */
   radius: number;
   /** Share of the finger's travel the content follows (0…1). */
@@ -168,7 +168,7 @@ export const EditorCanvas = memo(function EditorCanvas({
     const radiusOfSource = brush.radius * frameShortOfSource();
     last.current = { x, y };
     smoothed.current = { x, y };
-    useEditorStore.getState().beginStroke(toSource(x, y), radiusOfSource, brush.strength);
+    useEditorStore.getState().beginStroke(toSource(x, y), radiusOfSource, brush.strength, brush.mode === 'restore' ? 'restore' : 'push');
   };
   const strokeMove = (x: number, y: number) => {
     const prev = last.current;
@@ -266,7 +266,9 @@ export const EditorCanvas = memo(function EditorCanvas({
           brush
             ? brush.mode === 'spot'
               ? '편집 중인 사진. 잡티를 눌러 지우기'
-              : '편집 중인 사진. 드래그해 밀어서 다듬기'
+              : brush.mode === 'restore'
+                ? '편집 중인 사진. 문질러 원래대로 되돌리기'
+                : '편집 중인 사진. 드래그해 밀어서 다듬기'
             : '편집 중인 사진. 길게 눌러 원본 보기'
         }
       >
