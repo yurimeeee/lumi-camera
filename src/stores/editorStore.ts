@@ -4,9 +4,18 @@ import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
 import { aspectRatioOf } from '@/constants/crop';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
+import { DEFAULT_CURVES } from '@/services/color/curves';
+import { DEFAULT_HSL } from '@/services/color/hsl';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
 import type {
   AdjustmentKey,
+  Adjustments,
+  CurveChannel,
+  CurvePoint,
+  CurveSettings,
+  HslAdjust,
+  HslColor,
+  HslSettings,
   CropAspectId,
   EditState,
   FaceRetouch,
@@ -36,7 +45,10 @@ export function createEditState(partial?: Partial<EditState>): EditState {
   return {
     filterId: ORIGINAL_FILTER_ID,
     intensity: DEFAULT_FILTER_INTENSITY,
+    recipeId: null,
     adjustments: { ...DEFAULT_ADJUSTMENTS },
+    hsl: DEFAULT_HSL,
+    curves: DEFAULT_CURVES,
     retouch: { ...DEFAULT_RETOUCH },
     geometry: { ...DEFAULT_GEOMETRY },
     reshape: [],
@@ -47,6 +59,19 @@ export function createEditState(partial?: Partial<EditState>): EditState {
   };
 }
 
+/** The colour part of an edit — what a My Recipe stores. */
+export interface ColorLook {
+  filterId: string;
+  intensity: number;
+  adjustments: Adjustments;
+  hsl: HslSettings;
+  curves: CurveSettings;
+}
+
+export function colorLookOf(s: EditState): ColorLook {
+  return { filterId: s.filterId, intensity: s.intensity, adjustments: s.adjustments, hsl: s.hsl, curves: s.curves };
+}
+
 interface EditorState {
   source: SourceImage | null;
   present: EditState;
@@ -54,6 +79,8 @@ interface EditorState {
   committed: EditState;
   past: EditState[];
   future: EditState[];
+  /** Opened from an autosaved project: leaving should still ask before discarding. */
+  restored: boolean;
 }
 
 interface EditorActions {
@@ -66,6 +93,10 @@ interface EditorActions {
   setRetouch: (key: RetouchKey, value: number) => void;
   /** Face retouch for one detected face (live; `commit()` when the slider is released). */
   setFaceRetouch: (faceId: string, key: FaceRetouchKey, value: number) => void;
+  /** HSL for one colour band (live; `commit()` on release). */
+  setHsl: (color: HslColor, key: keyof HslAdjust, value: number) => void;
+  /** Curve points for one channel (live while dragging; `commit()` on release). */
+  setCurve: (channel: CurveChannel, points: readonly CurvePoint[]) => void;
   commit: () => void;
 
   /** 터치 보정: live while dragging; `commit()` on release (one undo step per stroke). */
@@ -80,6 +111,15 @@ interface EditorActions {
 
   /** Discrete updates — committed immediately. */
   setFilter: (id: string) => void;
+  /**
+   * Applies a look (My Recipe) as one undo step: filter, intensity and every
+   * colour value are replaced by copies of the recipe's. Retouch, geometry
+   * and touch edits are photo-specific and stay as they are.
+   */
+  applyLook: (look: ColorLook, recipeId: string | null) => void;
+  resetHslColor: (color: HslColor) => void;
+  resetHsl: () => void;
+  resetCurve: (channel: CurveChannel) => void;
   resetAdjustment: (key: AdjustmentKey) => void;
   resetRetouch: (key: RetouchKey) => void;
   /** Clears `keys` for one face (a single control or a whole category). */
@@ -103,6 +143,7 @@ const initial: EditorState = {
   committed: createEditState(),
   past: [],
   future: [],
+  restored: false,
 };
 
 export const useEditorStore = create<EditorState & EditorActions>()((set, get) => {
@@ -125,7 +166,9 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
 
     open: (source, partial) => {
       const state = createEditState(partial);
-      set({ source, present: state, committed: state, past: [], future: [] });
+      // Restored edits keep their ids; new strokes/spots must not collide.
+      for (const item of [...state.reshape, ...state.spots]) nextStrokeId = Math.max(nextStrokeId, item.id + 1);
+      set({ source, present: state, committed: state, past: [], future: [], restored: false });
     },
     close: () => set(initial),
 
@@ -140,6 +183,14 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
         if (prev[key] === value) return s;
         return { present: { ...s.present, faces: { ...s.present.faces, [faceId]: { ...prev, [key]: value } } } };
       }),
+    setHsl: (color, key, value) =>
+      set((s) => {
+        const prev = s.present.hsl[color];
+        if (prev[key] === value) return s;
+        return { present: { ...s.present, hsl: { ...s.present.hsl, [color]: { ...prev, [key]: value } } } };
+      }),
+    setCurve: (channel, points) =>
+      set((s) => ({ present: { ...s.present, curves: { ...s.present.curves, [channel]: points } } })),
     commit: () => commitState(get().present),
 
     beginStroke: (point, radius, strength, kind) =>
@@ -167,7 +218,30 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
 
     setFilter: (filterId) => {
       if (get().present.filterId === filterId) return;
-      update((s) => ({ ...s, filterId }));
+      update((s) => ({ ...s, filterId, recipeId: null }));
+    },
+    applyLook: (look, recipeId) =>
+      update((s) => ({
+        ...s,
+        filterId: look.filterId,
+        intensity: look.intensity,
+        recipeId,
+        adjustments: { ...DEFAULT_ADJUSTMENTS, ...look.adjustments },
+        hsl: { ...DEFAULT_HSL, ...look.hsl },
+        curves: { ...DEFAULT_CURVES, ...look.curves },
+      })),
+    resetHslColor: (color) => {
+      const a = get().present.hsl[color];
+      if (a.hue === 0 && a.saturation === 0 && a.luminance === 0) return;
+      update((s) => ({ ...s, hsl: { ...s.hsl, [color]: DEFAULT_HSL[color] } }));
+    },
+    resetHsl: () => {
+      if (get().present.hsl === DEFAULT_HSL) return;
+      update((s) => ({ ...s, hsl: DEFAULT_HSL }));
+    },
+    resetCurve: (channel) => {
+      if (get().present.curves[channel] === DEFAULT_CURVES[channel]) return;
+      update((s) => ({ ...s, curves: { ...s.curves, [channel]: DEFAULT_CURVES[channel] } }));
     },
     resetAdjustment: (key) => {
       if (get().present.adjustments[key] === 0) return;

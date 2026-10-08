@@ -21,6 +21,29 @@ function hideWasmHeapsFromEnumeration() {
   }
 }
 
+/**
+ * react-native-skia's web canvas tags its WebGL drawing buffer as
+ * display-p3, but CanvasKit renders plain sRGB values into it. The browser
+ * then shows sRGB numbers as P3, so the on-screen preview looks more
+ * saturated than the exported file (measured: R +4…+6 /255 on a skin-toned
+ * photo, identical greys). Keeping the buffer sRGB makes the preview match the
+ * export, which is rendered and encoded in sRGB.
+ */
+function keepWebGLCanvasesSRGB() {
+  if (typeof WebGL2RenderingContext === 'undefined') return;
+  const proto = WebGL2RenderingContext.prototype;
+  const desc = Object.getOwnPropertyDescriptor(proto, 'drawingBufferColorSpace');
+  if (!desc?.set || !desc.get) return;
+  Object.defineProperty(proto, 'drawingBufferColorSpace', {
+    ...desc,
+    set(this: WebGL2RenderingContext, value: PredefinedColorSpace) {
+      desc.set!.call(this, value === 'display-p3' ? 'srgb' : value);
+    },
+  });
+}
+
+keepWebGLCanvasesSRGB();
+
 LoadSkiaWeb({ locateFile: (file: string) => `/${file}` }).then(() => {
   hideWasmHeapsFromEnumeration();
   require('expo-router/entry');

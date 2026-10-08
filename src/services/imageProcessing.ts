@@ -2,9 +2,11 @@ import type { Uniforms } from '@shopify/react-native-skia';
 
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { getFilter } from '@/constants/filters';
-import type { Adjustments, RGB, Retouch, ToneKey, ToneParams } from '@/types/editing';
+import type { Adjustments, CurveSettings, HslAdjust, HslColor, RGB, Retouch, ToneKey, ToneParams } from '@/types/editing';
 
 import { NO_SPOTS, type SpotUniforms } from './blemish';
+import { buildCurveTable, isIdentityTable } from './color/curves';
+import { composeHsl } from './color/hsl';
 import { NO_FACE_WARP, type FaceWarpUniforms } from './faceWarp/FaceWarpEngine';
 import type { FilterDefinition } from '@/types/filters';
 
@@ -19,11 +21,17 @@ export interface ProcessingInput {
   intensity: number;
   adjustments?: Partial<Adjustments>;
   retouch?: Partial<Retouch>;
+  hsl?: Partial<Record<HslColor, Partial<HslAdjust>>>;
+  curves?: Partial<CurveSettings>;
 }
 
 export interface ResolvedProcessing {
   tone: Required<ToneParams>;
   split: { shadows: RGB; highlights: RGB; amount: number };
+  /** `uHsl`: 8 bands × (hue, saturation, luminance), -1…1. */
+  hsl: number[];
+  /** Composed curves (LUT_SIZE × RGB floats), or null when they are linear. */
+  curves: Float32Array | null;
 }
 
 const NEUTRAL: RGB = [0.5, 0.5, 0.5];
@@ -36,7 +44,7 @@ const TONE_KEYS = [
 ] as ToneKey[];
 
 /** Linear composition: filter × intensity, then user values on top. */
-export function resolveProcessing({ filter, intensity, adjustments, retouch }: ProcessingInput): ResolvedProcessing {
+export function resolveProcessing({ filter, intensity, adjustments, retouch, hsl, curves }: ProcessingInput): ResolvedProcessing {
   const k = clamp(intensity, 0, 100) / 100;
   const tone = {} as Required<ToneParams>;
   // Black & white looks stay monochrome at any intensity; intensity only
@@ -51,11 +59,17 @@ export function resolveProcessing({ filter, intensity, adjustments, retouch }: P
   const split = filter.splitTone
     ? { shadows: filter.splitTone.shadows, highlights: filter.splitTone.highlights, amount: filter.splitTone.amount * k }
     : { shadows: NEUTRAL, highlights: NEUTRAL, amount: 0 };
-  return { tone, split };
+  const table = buildCurveTable(filter.curves, k, curves);
+  return { tone, split, hsl: composeHsl(filter.hsl, k, hsl), curves: isIdentityTable(table) ? null : table };
 }
 
 export function isIdentity(p: ResolvedProcessing): boolean {
-  return p.split.amount === 0 && TONE_KEYS.every((key) => p.tone[key] === 0);
+  return (
+    p.split.amount === 0 &&
+    TONE_KEYS.every((key) => p.tone[key] === 0) &&
+    p.hsl.every((v) => v === 0) &&
+    p.curves === null
+  );
 }
 
 /**
@@ -104,16 +118,33 @@ export function buildUniforms(
     uShadowTint: [...p.split.shadows],
     uHighlightTint: [...p.split.highlights],
     uSplit: n(p.split.amount),
+    uHsl: p.hsl,
+    uHslOn: p.hsl.some((v) => v !== 0) ? 1 : 0,
+    uCurvesOn: p.curves ? 1 : 0,
   };
 }
 
-export function uniformsFor(
-  filterId: string,
-  intensity: number,
-  width: number,
-  height: number,
-  adjustments?: Partial<Adjustments>,
-  retouch?: Partial<Retouch>,
-): Uniforms {
-  return buildUniforms(resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch }), width, height);
+/**
+ * A colour look without a photo: a filter at some intensity, optionally with
+ * adjustments, HSL and curves on top. Filters, My Recipes and the camera's
+ * live preview are all looks, rendered by the same shader as edits.
+ */
+export interface Look {
+  filterId: string;
+  /** 0…100 */
+  intensity: number;
+  adjustments?: Partial<Adjustments>;
+  hsl?: Partial<Record<HslColor, Partial<HslAdjust>>>;
+  curves?: Partial<CurveSettings>;
+}
+
+export function resolveLook(look: Look, retouch?: Partial<Retouch>): ResolvedProcessing {
+  return resolveProcessing({ ...look, filter: getFilter(look.filterId), retouch });
+}
+
+/** Uniforms + curve table for a look rendered at width×height (null uniforms = untouched image). */
+export function lookRender(look: Look, width: number, height: number): { uniforms: Uniforms | null; curves: Float32Array | null } {
+  const p = resolveLook(look);
+  if (isIdentity(p)) return { uniforms: null, curves: null };
+  return { uniforms: buildUniforms(p, width, height), curves: p.curves };
 }

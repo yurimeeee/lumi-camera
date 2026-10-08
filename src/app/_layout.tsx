@@ -1,12 +1,16 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Toast } from '@/components/common/Toast';
 import { APP_MAX_WIDTH, colors } from '@/constants/theme';
+import { startAutosave } from '@/services/editProject';
 
 export default function RootLayout() {
+  useEffect(() => startAutosave(), []);
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="dark" />
@@ -26,6 +30,7 @@ export default function RootLayout() {
           <Stack.Screen name="filters/[id]" options={{ animation: 'fade' }} />
           <Stack.Screen name="favorites/index" />
           <Stack.Screen name="settings/index" />
+          <Stack.Screen name="recipes/index" />
         </Stack>
         <Toast />
       </View>

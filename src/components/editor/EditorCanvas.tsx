@@ -102,6 +102,8 @@ export const EditorCanvas = memo(function EditorCanvas({
   const intensity = useEditorStore((s) => s.present.intensity);
   const adjustments = useEditorStore((s) => s.present.adjustments);
   const retouch = useEditorStore((s) => s.present.retouch);
+  const hsl = useEditorStore((s) => s.present.hsl);
+  const curves = useEditorStore((s) => s.present.curves);
   const strokes = useEditorStore((s) => s.present.reshape);
   const spots = useEditorStore((s) => s.present.spots);
   const faceEdits = useEditorStore((s) => s.present.faces);
@@ -137,11 +139,14 @@ export const EditorCanvas = memo(function EditorCanvas({
     [faces, faceEdits, geometry, width, height],
   );
 
+  const processing = useMemo(
+    () => resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch, hsl, curves }),
+    [filterId, intensity, adjustments, retouch, hsl, curves],
+  );
   const uniforms = useMemo(() => {
-    const p = resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch });
-    if (isIdentity(p) && !reshape && spots.length === 0 && !facePlan) return null;
-    return buildUniforms(p, width, height, faceWarpUniforms(facePlan), spotUniforms(spots, geometry, source, width, height));
-  }, [filterId, intensity, adjustments, retouch, width, height, facePlan, reshape, spots, geometry, source]);
+    if (isIdentity(processing) && !reshape && spots.length === 0 && !facePlan) return null;
+    return buildUniforms(processing, width, height, faceWarpUniforms(facePlan), spotUniforms(spots, geometry, source, width, height));
+  }, [processing, width, height, facePlan, reshape, spots, geometry, source]);
 
   /** Face outlines in canvas pixels (for the selector and taps). */
   const faceOutlines = useMemo(
@@ -336,6 +341,7 @@ export const EditorCanvas = memo(function EditorCanvas({
                 height={height}
                 uniforms={showOriginal ? null : uniforms}
                 reshape={reshape}
+                curves={processing.curves}
               />
               {showFaceGuides && !showOriginal ? (
                 <FaceGuides outlines={faceOutlines} selectedId={selectedFaceId} plan={facePlan} />

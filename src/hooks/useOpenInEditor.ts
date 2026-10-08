@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 
+import { storeOriginal } from '@/services/appFiles';
+import { pruneStoredOriginals } from '@/services/editProject';
 import { EXPORT_MAX_SIDE_HQ, EXPORT_MAX_SIDE_STD, normalizeImage } from '@/services/imagePipeline';
 import { resolvePhotoFile } from '@/services/mediaLibrary';
 import { useCameraStore } from '@/stores/cameraStore';
@@ -14,13 +16,16 @@ export function useOpenInEditor() {
 
   const openFile = useCallback(async (uri: string, takenAt: number) => {
     const settings = useSettingsStore.getState();
-    const image = await normalizeImage(uri, settings.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD);
+    const normalized = await normalizeImage(uri, settings.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD);
+    // Edit an app-owned copy so the project survives cache purges and restarts.
+    const image = { ...normalized, uri: await storeOriginal(normalized.uri) };
     useCameraStore.getState().setLastPhoto(image.uri);
     useEditorStore.getState().open(
       { ...image, origin: 'library', takenAt },
       { filterId: settings.defaultFilterId, intensity: settings.defaultIntensity, dateStamp: settings.dateStamp },
     );
     router.push('/editor');
+    void pruneStoredOriginals([image.uri]);
   }, []);
 
   const openAsset = useCallback(

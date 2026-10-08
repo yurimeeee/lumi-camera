@@ -18,7 +18,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { DATE_FORMATS, formatDateStamp } from '@/utils/dateStamp';
 import { permissionDenied } from '@/utils/dialogs';
 
-type Sheet = 'timer' | 'dateFormat' | 'filter' | 'ratio' | 'intensity' | null;
+type Sheet = 'timer' | 'dateFormat' | 'filter' | 'ratio' | 'intensity' | 'format' | 'quality' | null;
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -95,15 +95,34 @@ export default function SettingsScreen() {
             caption="촬영한 사진의 필터 적용 전 원본을 ‘Lumi Originals’에 저장해요"
             enabled={s.saveOriginal}
             onChange={(v) => s.set('saveOriginal', v)}
-          />
-          <SettingToggle
-            icon="diamond-outline"
-            label="고화질 저장"
-            caption={s.highQuality ? '최대 4096px · JPEG 95%' : '최대 2048px · JPEG 85%'}
-            enabled={s.highQuality}
-            onChange={(v) => s.set('highQuality', v)}
             last
           />
+        </SettingSection>
+
+        <SettingSection title="저장">
+          <SettingToggle
+            icon="diamond-outline"
+            label="고해상도 저장"
+            caption={s.highQuality ? '긴 변 최대 4096px (원본이 더 작으면 원본 크기)' : '긴 변 최대 2048px'}
+            enabled={s.highQuality}
+            onChange={(v) => s.set('highQuality', v)}
+          />
+          <SettingRow
+            icon="document-outline"
+            label="저장 형식"
+            value={s.exportFormat === 'png' ? 'PNG' : 'JPEG'}
+            onPress={() => setSheet('format')}
+            last={s.exportFormat === 'png'}
+          />
+          {s.exportFormat === 'jpeg' ? (
+            <SettingRow
+              icon="speedometer-outline"
+              label="JPEG 품질"
+              value={`${s.jpegQuality}%`}
+              onPress={() => setSheet('quality')}
+              last
+            />
+          ) : null}
         </SettingSection>
 
         <SettingSection title="사진 편집 설정">
@@ -130,12 +149,36 @@ export default function SettingsScreen() {
 
         <SettingSection title="필터">
           <SettingRow icon="apps-outline" label="필터 둘러보기" onPress={() => router.push('/filters')} />
+          <SettingRow icon="bookmark-outline" label="My Recipe 관리" onPress={() => router.push('/recipes')} />
           <SettingRow icon="heart-outline" label="즐겨찾기 필터" onPress={() => router.push('/favorites')} last />
         </SettingSection>
 
         <Text style={styles.footer}>Lumi · Capture · Edit · Keep</Text>
       </ScrollView>
 
+      <OptionSheet
+        visible={sheet === 'format'}
+        title="저장 형식"
+        options={[
+          { value: 'jpeg' as const, label: 'JPEG', caption: '용량이 작고 어디서나 열려요 · 촬영 날짜·위치 정보 포함' },
+          { value: 'png' as const, label: 'PNG', caption: '무손실 · 용량이 커요 · 메타데이터 없음' },
+        ]}
+        value={s.exportFormat}
+        onSelect={(v) => s.set('exportFormat', v)}
+        onClose={close}
+      />
+      <OptionSheet
+        visible={sheet === 'quality'}
+        title="JPEG 품질"
+        options={[
+          { value: 80 as const, label: '80%', caption: '가볍게' },
+          { value: 90 as const, label: '90%', caption: '권장 · 기본값' },
+          { value: 100 as const, label: '100%', caption: '최고 화질 · 용량이 커요' },
+        ]}
+        value={s.jpegQuality}
+        onSelect={(v) => s.set('jpegQuality', v)}
+        onClose={close}
+      />
       <OptionSheet
         visible={sheet === 'timer'}
         title="타이머"

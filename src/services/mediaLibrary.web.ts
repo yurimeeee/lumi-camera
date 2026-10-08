@@ -40,7 +40,7 @@ export async function pickImageFromSystem(): Promise<PickedImage | null> {
 export async function saveToLibrary(fileUri: string): Promise<SaveResult> {
   const a = document.createElement('a');
   a.href = fileUri;
-  a.download = `lumi-${Date.now()}.jpg`;
+  a.download = `lumi-${Date.now()}.${fileUri.startsWith('data:image/png') ? 'png' : 'jpg'}`;
   document.body.appendChild(a);
   a.click();
   a.remove();

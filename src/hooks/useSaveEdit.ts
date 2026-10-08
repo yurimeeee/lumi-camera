@@ -1,5 +1,5 @@
 import type { SkTypeface } from '@shopify/react-native-skia';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { prepareOriginal, renderEdit } from '@/services/exportImage';
 import { feedback } from '@/services/feedback';
@@ -17,15 +17,20 @@ function permissionAlert() {
 /** Render at export resolution and save (plus the original, when enabled). */
 export function useSaveEdit(typeface: SkTypeface | null) {
   const [saving, setSaving] = useState(false);
+  // State lags a render behind; the ref blocks a second tap immediately.
+  const busy = useRef(false);
 
   const save = useCallback(async () => {
     const { source, present } = useEditorStore.getState();
-    if (!source || saving) return false;
+    if (!source || busy.current) return false;
+    busy.current = true;
     const settings = useSettingsStore.getState();
     setSaving(true);
     try {
       const out = await renderEdit(source, present, {
         highQuality: settings.highQuality,
+        format: settings.exportFormat,
+        quality: settings.jpegQuality,
         dateFormat: settings.dateFormat,
         stampTypeface: typeface,
         location: source.location,
@@ -48,13 +53,14 @@ export function useSaveEdit(typeface: SkTypeface | null) {
       return true;
     } catch (e) {
       feedback.error();
-      showToast('저장 중 문제가 생겼어요');
+      showToast(e instanceof Error && /인코딩|렌더링|열 수 없어요/.test(e.message) ? e.message : '저장 중 문제가 생겼어요');
       if (__DEV__) console.warn('[save]', e);
       return false;
     } finally {
+      busy.current = false;
       setSaving(false);
     }
-  }, [saving, typeface]);
+  }, [typeface]);
 
   return { save, saving };
 }

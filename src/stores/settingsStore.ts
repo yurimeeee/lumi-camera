@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
-import type { CaptureRatio, DateFormat } from '@/types/settings';
+import type { CaptureRatio, DateFormat, ExportFormat, JpegQuality } from '@/types/settings';
 
 import { persistStorage } from './storage';
 
@@ -14,7 +14,10 @@ export interface SettingsState {
   dateStamp: boolean;
   dateFormat: DateFormat;
   saveOriginal: boolean;
+  /** Export resolution: up to 4096 px (on) or 2048 px (off) on the long side. */
   highQuality: boolean;
+  exportFormat: ExportFormat;
+  jpegQuality: JpegQuality;
   defaultFilterId: string;
   defaultIntensity: number;
   defaultRatio: CaptureRatio;
@@ -33,6 +36,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   dateFormat: 'apostrophe',
   saveOriginal: false,
   highQuality: true,
+  exportFormat: 'jpeg',
+  jpegQuality: 90,
   defaultFilterId: ORIGINAL_FILTER_ID,
   defaultIntensity: DEFAULT_FILTER_INTENSITY,
   defaultRatio: '4:3',

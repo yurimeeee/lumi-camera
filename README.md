@@ -7,12 +7,14 @@ VSCO보다 쉽고 기본 카메라보다 감성적인, warm · soft · film 톤�
 
 | 영역 | 기능 |
 | --- | --- |
-| 카메라 | 실시간 프리뷰, 촬영, 전/후면 전환, 플래시(Auto/On/Off), 타이머(3·5·10초 카운트다운), 3×3 격자, 촬영 비율(Full/1:1/4:3/16:9), 피부 보정 강도, 필터 캐러셀(카테고리·즐겨찾기 탭), 셔터 블링크 + 햅틱 |
-| 필터 | 20종(Original, Warm 5, Cool 3, Film 5, Soft 3, B&W 3), 카테고리별 보기, 상세 화면, 즐겨찾기(AsyncStorage 저장) |
+| 카메라 | **프레임 단위 GPU 실시간 필터**(Development Build: 편집·저장과 같은 Lumi 셰이더를 카메라 프레임에 적용, [카메라](#카메라-실시간-필터) 참고), 촬영, 전/후면 전환, 플래시(Auto/On/Off), 타이머(3·5·10초 카운트다운, 탭해서 취소), 3×3 격자, 촬영 비율(Full/1:1/4:3/16:9), 탭 초점 + 노출 보정 슬라이더, 필터/레시피 강도(선택한 필터를 한 번 더 탭), 피부 보정 강도, 필터 캐러셀(All·Favorites·My·카테고리 탭), 셔터 블링크 + 햅틱 |
+| 필터 | 20종(Original, Warm 5, Cool 3, Film 5, Soft 3, B&W 3) — 톤 파라미터 + 스플릿 톤 + 필름 톤 커브 + 색상별 HSL의 조합, 강도 0(원본)…100(정의된 효과), 카테고리별 보기, 상세 화면, 즐겨찾기(AsyncStorage 저장) |
+| My Recipe | 편집한 색감(필터·강도·조정·HSL·커브)을 이름 붙여 저장 → 다른 사진·카메라에서 적용, 이름 변경·즐겨찾기·삭제(길게 누르기 또는 설정 › My Recipe 관리), 썸네일. 자르기·얼굴 보정은 포함하지 않음 |
 | 앨범 | 최근 사진 그리드(페이지네이션), 제한된 접근(iOS limited) 안내 및 추가 선택, 권한 없이도 시스템 사진 선택기로 편집 가능 |
-| 편집 | 필터 + 강도, 조정 12종, 보정(Retouch: Skin 5종 + 얼굴 랜드마크 기반 Face 7 · Eyes 6 · Nose 6 · Lips 6 · Proportion 7, [얼굴 보정](#얼굴-보정-retouch) 참고), 터치 보정(밀기: 브러시 크기·강도 선택 후 드래그 / 복원: 문질러 되돌리기 / 잡티 제거: 크기 선택 후 탭), 효과 3종 + 날짜 스탬프, 자르기(Free/Original/1:1/4:3/3:4/16:9/9:16, 드래그·코너 리사이즈), 90° 회전, 좌우/상하 반전, Before/After(길게 누르기 또는 버튼), Undo/Redo(최대 40단계), 개별/전체 초기화, 핀치 확대·축소(최대 6배, 더블탭·‘원래 크기’로 복귀, 웹은 트랙패드 핀치·Ctrl/⌘+휠) |
-| 저장 | 전체 해상도로 오프스크린 렌더링 → JPEG(고화질 95% / 표준 85%) → EXIF(촬영 시각, 선택 시 GPS) → 사진 보관함 ‘Lumi’ 앨범. 원본 함께 저장 시 ‘Lumi Originals’에 별도 저장 |
-| 설정 | 무음 모드, 격자, 타이머, 거울 모드, 위치 정보 저장, 촬영 날짜 표시 + 형식 4종, 원본 함께 저장, 고화질 저장, 기본 필터·강도·촬영 비율 (Zustand + AsyncStorage) |
+| 편집 | 필터 + 강도, 조정 12종, **HSL**(8색 × 색상·채도·밝기), **톤 커브**(RGB·R·G·B, 점 추가·드래그·삭제), 보정(Retouch: Skin 5종 + 얼굴 랜드마크 기반 Face 7 · Eyes 6 · Nose 6 · Lips 6 · Proportion 7, [얼굴 보정](#얼굴-보정-retouch) 참고), 터치 보정(밀기: 브러시 크기·강도 선택 후 드래그 / 복원: 문질러 되돌리기 / 잡티 제거: 크기 선택 후 탭), 효과 3종 + 날짜 스탬프, 자르기(Free/Original/1:1/4:3/3:4/16:9/9:16, 드래그·코너 리사이즈), 90° 회전, 좌우/상하 반전, Before/After(길게 누르기 또는 버튼), Undo/Redo(최대 40단계), 개별/전체 초기화, 핀치 확대·축소(최대 6배, 더블탭·‘원래 크기’로 복귀, 웹은 트랙패드 핀치·Ctrl/⌘+휠) |
+| 저장 | 화면 캡처가 아니라 원본에서 오프스크린 렌더링(긴 변 최대 4096px / 2048px) → JPEG 80·90(기본)·100% 또는 PNG → EXIF(JPEG: 촬영 시각, 선택 시 GPS) → 사진 보관함 ‘Lumi’ 앨범, “사진에 저장했어요”. 중복 저장 방지, 오류 시 안내. 원본 함께 저장 시 ‘Lumi Originals’에 별도 저장 |
+| 비파괴 편집 | 편집할 사진은 앱 Documents에 사본으로 보관(원본 파일은 읽기만), 편집은 데이터(EditState)로만 저장. 마지막 편집 상태 자동 저장 → 앱을 다시 열면 ‘편집하던 사진이 있어요 · 이어서 편집’ |
+| 설정 | 무음 모드, 격자, 타이머, 거울 모드, 위치 정보 저장, 촬영 날짜 표시 + 형식 4종, 원본 함께 저장, 고해상도 저장, 저장 형식(JPEG/PNG)·JPEG 품질, 기본 필터·강도·촬영 비율, My Recipe 관리 (Zustand + AsyncStorage) |
 
 ## 기술 스택
 
@@ -20,7 +22,8 @@ VSCO보다 쉽고 기본 카메라보다 감성적인, warm · soft · film 톤�
 - Expo Router (파일 기반 라우팅, typed routes)
 - Zustand + AsyncStorage persist
 - expo-camera, expo-image-picker, expo-media-library(Next API), expo-image-manipulator, expo-file-system, expo-location, expo-haptics, expo-image
-- @shopify/react-native-skia (SkSL 런타임 셰이더) — 필터·보정·날짜 스탬프 렌더링
+- @shopify/react-native-skia (SkSL 런타임 셰이더) — 필터·보정·HSL·커브·날짜 스탬프 렌더링, 카메라 프레임 렌더링
+- react-native-vision-camera 5 + react-native-vision-camera-skia/-worklets + react-native-nitro-modules/-image — 카메라 프레임을 Skia 텍스처로 받아 셰이더 적용(Development Build)
 - react-native-reanimated 4 + react-native-worklets, react-native-gesture-handler
 - piexifjs (순수 JS EXIF 쓰기)
 - 얼굴 랜드마크: Apple Vision(iOS, 로컬 Expo 모듈 `modules/lumi-face-landmarks`) · MediaPipe Face Landmarker(웹)
@@ -75,16 +78,17 @@ npx expo start       # Development Build(또는 Expo Go)로 열기
 
 | 명령 | 설명 |
 | --- | --- |
-| `npm run typecheck` | `tsc --noEmit` (앱 + `scripts/face-warp`) |
+| `npm run typecheck` | `tsc --noEmit` (앱 + `scripts/face-warp` + `scripts/image-engine`) |
+| `npm run test:engine` | 이미지 엔진·상태 테스트 + 실제 셰이더 golden image (macOS/Linux + [Bun]) |
 | `npm run lint` | `expo lint` |
 | `npx expo-doctor` | 의존성·설정 진단 |
 | `npm run web` | 웹에서 UI 확인 (얼굴 보정 포함, MediaPipe) |
 | `npm run ios` | `expo run:ios` — 로컬 Development Build (Xcode 16.1 이상) |
 | `npm run check:face-warp` | 얼굴 워프 회귀 검사 (macOS + [Bun], 아래 [검증 결과](#검증-결과) 참고) |
 
-### iPhone: 얼굴 보정은 Development Build가 필요합니다
+### iPhone: 실시간 카메라 필터와 얼굴 보정은 Development Build가 필요합니다
 
-**왜 필요한가**: 얼굴 보정은 사진 속 얼굴의 랜드마크(윤곽·눈·코·입 좌표)가 있어야 동작합니다. iOS에서는 Apple Vision 프레임워크로 검출하는데, 이 코드는 Lumi 전용 네이티브 모듈(`modules/lumi-face-landmarks`, Swift)이라 Expo Go 안에는 들어 있지 않습니다. Expo Go는 미리 포함된 네이티브 모듈만 실행할 수 있습니다.
+**왜 필요한가**: 카메라 프레임에 필터를 적용하는 VisionCamera(Nitro 네이티브 모듈)와 얼굴 보정 모두 Expo Go에 없는 네이티브 코드입니다. 얼굴 보정은 사진 속 얼굴의 랜드마크(윤곽·눈·코·입 좌표)가 있어야 동작합니다. iOS에서는 Apple Vision 프레임워크로 검출하는데, 이 코드는 Lumi 전용 네이티브 모듈(`modules/lumi-face-landmarks`, Swift)이라 Expo Go 안에는 들어 있지 않습니다. Expo Go는 미리 포함된 네이티브 모듈만 실행할 수 있습니다.
 
 **추가된 네이티브 의존성**
 
@@ -93,8 +97,9 @@ npx expo start       # Development Build(또는 Expo Go)로 열기
 | `modules/lumi-face-landmarks` | 로컬 Expo 모듈(autolinking, `expo-module.config.json`). `detect(uri)` → 얼굴별 랜드마크 영역. iOS 16.4+ |
 | Vision.framework, ImageIO.framework | iOS 시스템 프레임워크 — 외부 라이브러리·모델 파일·네트워크 없음, 기기 안에서 처리 |
 | `expo-dev-client` | Development Build 런처 |
+| `react-native-vision-camera` 5 (+ `-skia`, `-worklets`), `react-native-nitro-modules`, `react-native-nitro-image` | 카메라 프레임 → Skia 텍스처 → Lumi 셰이더. 권한 문구는 기존 expo-camera 플러그인의 `NSCameraUsageDescription` 사용 |
 
-Expo Go에서도 앱은 그대로 실행되고(카메라·필터·조정·Skin 보정·터치 보정·자르기 모두 동작), Retouch의 Face/Eyes/Nose/Lips/Proportion 탭만 “Development Build에서 쓸 수 있어요” 안내와 함께 비활성화됩니다. 모듈은 `requireOptionalNativeModule`로 불러와 없을 때 null이 되므로 크래시하지 않습니다.
+Expo Go에서도 앱은 그대로 실행되고(카메라·필터·조정·HSL·커브·레시피·Skin 보정·터치 보정·자르기 모두 동작), 카메라 미리보기는 색 레이어 근사로 바뀌며(촬영본은 정확), Retouch의 Face/Eyes/Nose/Lips/Proportion 탭만 “Development Build에서 쓸 수 있어요” 안내와 함께 비활성화됩니다. 모듈은 `requireOptionalNativeModule`로 불러와 없을 때 null이 되므로 크래시하지 않습니다.
 
 **iOS 빌드 방법**
 
@@ -153,9 +158,75 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 
 성능: 슬라이더를 움직이면 편집 캔버스(uniform)만 다시 그려지고 이미지 데이터는 복제되지 않습니다. 필터 썸네일은 한 번만 오프스크린 렌더링해 캐시하고 이미지로 표시합니다. Zustand selector로 필요한 상태만 구독합니다.
 
+## 이미지 처리 엔진 (Phase 1)
+
+보정값은 순수 데이터(`EditState`)이고, 이를 픽셀로 바꾸는 수학은 **SkSL 셰이더 하나**(`shaders/lumiShader.ts`)에만 있습니다. 편집 미리보기, 필터 썸네일, 카메라 프레임, 고해상도 저장이 모두 같은 `resolveProcessing → buildUniforms → LUMI_SKSL (+ 커브 LUT)`을 거치고, 해상도·실행 위치만 다릅니다. 반경 같은 공간 값은 짧은 변의 1/1000 단위라 해상도와 무관합니다.
+
+```
+EditState / Recipe / 카메라 룩 (순수 데이터, -100…100)
+   │  services/imageProcessing.ts  resolveProcessing(): 필터 × 강도 + 사용자 값 (톤·스플릿 톤·HSL·커브)
+   │  services/color/hsl.ts         composeHsl()  → uHsl[8] (float3)
+   │  services/color/curves.ts      buildCurveTable() → 256×RGB LUT (monotone cubic)
+   ▼
+buildUniforms() + curveTexture()      (services/color/curveTexture.ts: 256×1 텍스처, 내용 기준 캐시)
+   ▼
+LUMI_SKSL  … 노출/밝기 → 화이트밸런스 → 하이라이트/그림자 → 대비 → 채도/생동감 → HSL → 스플릿 톤 → 커브 LUT → 광채 → 페이드 → 비네팅 → 그레인
+   ├─ render/LumiLayer.tsx            편집 캔버스 · 썸네일 · 필터 상세 (Preview)
+   ├─ services/exportImage.tsx        원본 해상도 오프스크린 렌더 → JPEG/PNG (Export)
+   └─ components/camera/SkiaLiveCamera.native.tsx   카메라 프레임 워클릿 (render/uniformLayout.ts로 같은 uniform을 평탄화)
+```
+
+요청 구조와의 대응: `image-engine/core` → `services/imageProcessing.ts`(ImageEngine/RenderPipeline 역할), `operations/*` → 셰이더의 단계별 블록 + `services/color/{hsl,curves}.ts`, `filters/presets.ts` → `constants/filters.ts`, `filterCompiler` → `resolveProcessing`, `PreviewRenderer` → `render/LumiLayer.tsx`, `ExportRenderer` → `services/exportImage.tsx`, `shaders/` → `shaders/lumiShader.ts`. 기존 구조가 이미 UI와 처리를 분리하고 있어 디렉터리를 옮기지 않았습니다.
+
+| 연산 | 구현 |
+| --- | --- |
+| Exposure | 선형 배율 `c × 2^(1.2·v)` (광량) |
+| Brightness | 감마 곡선 `c^(2^(−0.7·v))` — 검정·흰색 고정, 중간톤만 이동 |
+| Highlights / Shadows | 휘도 기반 smoothstep 마스크로 밝은/어두운 영역만 |
+| Saturation / Vibrance | 휘도 기준 혼합 / 이미 채도 높은 픽셀은 덜 증가 |
+| Temperature / Tint | 채널 게인(파랑↔노랑) / 초록↔마젠타 |
+| HSL | 8개 색상 중심(0·30·60·120·180·225·270·315°), 이웃 중심까지 smoothstep 가중치(합 = 1, 경계 단절 없음), 회색 근처는 게이트로 제외. 색상 ±30°, 채도 배율, 밝기 |
+| Curves | Fritsch–Carlson monotone cubic(오버슈트·NaN 없음), 필터 커브(강도로 직선과 보간) → 사용자 RGB 커브 → 채널 커브를 256 LUT로 합성, 셰이더에서 엔트리 사이 선형 보간 |
+
+### 필터 강도와 My Recipe
+
+- 강도 k = intensity/100: 필터의 톤 값·스플릿 톤·HSL은 ×k, 커브는 `x + (f(x) − x)·k`. 0이면 원본과 비트 단위로 같고(셰이더를 건너뜀), 100이면 정의 그대로입니다. 사용자의 수동 보정은 필터와 별도 값이라 필터를 바꿔도 유지됩니다.
+- 레시피는 색감 값만 **복사**해 저장하고, 적용할 때도 편집에 **복사**합니다(`editorStore.applyLook`, Undo 1단계). 레시피를 지워도 그 레시피로 만든 편집은 그대로입니다.
+- 카메라에서 레시피의 강도 슬라이더는 레시피 전체(필터 강도·조정·HSL·커브)를 원본 쪽으로 같은 비율로 줄입니다(`scaleColorLook`). 미리보기와 촬영본에 같은 축소값이 들어갑니다.
+
+### 비파괴 편집 · 자동 저장
+
+- 앨범·카메라에서 연 사진은 정규화(EXIF 회전 반영, HEIC 디코딩) 후 `Documents/originals/`에 사본을 만들고(`services/appFiles.ts`), 편집은 그 사본만 읽습니다. 사용자의 사진 파일은 수정하지 않고, 저장은 항상 새 파일입니다.
+- `services/editProject.ts`: 커밋된 편집 상태가 바뀔 때마다(디바운스 0.4초) `EditProject {id, originalUri, createdAt, updatedAt, source, document}`를 AsyncStorage에 저장합니다. Undo 기록은 저장하지 않습니다. 편집 화면을 나가면 지우고, 앱이 종료된 채 남아 있으면 카메라 화면에 ‘편집하던 사진이 있어요 · 이어서 편집’이 표시됩니다(× → 확인 후 삭제). 이후 버전에서 필드가 추가돼도 `createEditState`로 기본값이 채워집니다.
+- 웹은 원본을 data URL로 보관합니다(약 3.5MB 이하일 때만 — localStorage 한도).
+
+## 카메라 실시간 필터
+
+| 후보 | 판단 |
+| --- | --- |
+| expo-camera (기존) | 프레임을 JS/Skia에 넘기지 않음 → 색 레이어 덮기만 가능. 요구사항상 실제 필터로 인정되지 않음 → **Expo Go/웹 폴백으로만** 유지 |
+| **VisionCamera 5 + vision-camera-skia** (선택) | Expo SDK 57 / RN 0.86 / Skia 2.6 / Reanimated 4.5 / worklets 0.10과 호환(peer `*`, 개발 버전 Skia 2.6.4·worklets 0.9). `SkiaCamera`가 프레임을 Skia 텍스처로 주고, 프레임 워클릿에서 **같은 LUMI_SKSL**을 `makeShaderWithChildren`으로 실행. 별도 사진 출력으로 원본 해상도 촬영. Nitro 네이티브 모듈이라 Development Build 필요 |
+| iOS Core Image / Metal 직접 구현 | 셰이더를 Metal로 다시 써야 해서 미리보기와 저장 수학이 갈라짐 → 제외 |
+
+- 구조: `components/camera/LiveCamera.tsx`가 VisionCamera를 `require`로 감싸 불러옵니다(Expo Go에서는 Nitro 모듈이 없어 import 자체가 throw → expo-camera 폴백). `LIVE_CAMERA`로 기능(프레임 필터·초점·노출) 지원 여부를 화면에 알립니다.
+- 필터·강도·레시피를 바꾸면 공유값(uniform 배열·LUT 이미지)만 바뀌고 카메라 세션은 재구성되지 않습니다. 프레임은 프리뷰 크기(`enablePreviewSizedOutputBuffers`)로 받아 셰이더 비용을 줄입니다.
+- 촬영: 사진 출력(JPEG 95%) → EXIF 회전 반영 → 전면 거울 모드 설정에 맞게 좌우 반전 보정(`CapturedPhoto.mirrored`) → 비율 중앙 크롭 → 앱 사본 → 같은 룩이 적용된 편집 화면(저장 또는 추가 편집).
+- 초점·노출: 프리뷰를 탭하면 그 지점에 초점·측광(AF/AE) + 노출 슬라이더(±2EV, 기기 범위 내, 3.5초 후 숨김).
+
+## 테스트
+
+| 명령 | 내용 |
+| --- | --- |
+| `npm run test:engine` | Bun + CanvasKit. **실제 LUMI_SKSL**을 CPU로 렌더링해 검사(35개): 셰이더 컴파일, 중립 uniform = 원본(HSL·커브 경로 강제 실행), 모든 필터 강도 0 = 원본, 강도 100 = 정의값, 필터 간 구별, HSL Orange/Blue가 피부·하늘만 바꾸고 회색은 그대로 + CPU 미러와 픽셀 일치(≤2/255), 색상 경계 단절 없음, S-커브·Blue 채널이 LUT와 일치(≤1/255), 극단적 커브에서도 NaN·범위 초과 없음, **미리보기 해상도 vs 저장 해상도 결과 일치**(시나리오 B), golden image 9장(`scripts/image-engine/golden`), Undo/Redo, Reset(HSL 색상별·커브 채널별·전체), Recipe 저장/적용/삭제/이름 변경/영속화, EditProject 직렬화·구버전 문서 복구, 원본 참조 유지·ID 충돌 없음, 인코딩 실패 오류 |
+| `npm run test:engine:update` | 의도한 룩 변경 후 golden image 갱신 |
+| `npm run check:face-warp` | 기존 얼굴 워프 회귀 검사(셰이더에 LUT 자식이 추가돼도 통과 확인) |
+
+웹 E2E(헤드리스 Chromium + SwiftShader WebGL, 실제 앱 조작)로 시나리오 B·C·D·E·F를 확인했습니다: Peachy → 노출 → HSL Orange 밝기 → S-커브 → Before(원본) → Undo/Redo → 저장(원본 해상도 1280×741, 미리보기와 채널 평균 차 0.30/255, 토스트) → Save as Recipe ‘Warm Diary’ → 새로고침 → 이어서 편집(편집 결과 픽셀 차 0) → 전체 초기화(원본) → 다른 사진에 Warm Diary 적용, 콘솔 오류 0.
+
 ## 기술적 제약과 선택한 대안
 
-- **카메라 실시간 필터**: expo-camera는 프레임을 JS/Skia로 넘기지 않습니다. 프리뷰에서는 필터별 `preview` 레이어를 RN `mixBlendMode`(soft-light, saturation 등)로 겹쳐 분위기를 근사하고, **촬영된 사진에는 Skia 파이프라인 전체가 정확히 적용**됩니다. 프레임 단위 실시간 필터가 필요하면 react-native-vision-camera + Skia Frame Processor(Development Build 필요)로 확장할 수 있습니다.
+- **카메라 실시간 필터**: Development Build에서는 VisionCamera 5 + Skia로 프레임마다 Lumi 셰이더를 실행합니다([카메라](#카메라-실시간-필터)). Expo Go·웹은 프레임에 접근할 수 없어 expo-camera + RN `mixBlendMode` 레이어 근사로 동작하고, 화면에 ‘미리보기는 근사치’라고 표시합니다. 어느 쪽이든 **촬영된 사진에는 Skia 파이프라인 전체가 정확히 적용**됩니다.
+- **웹 캔버스 색 공간**: react-native-skia 웹 캔버스는 WebGL 버퍼를 display-p3로 지정하지만 CanvasKit은 sRGB 값을 그려, 미리보기가 저장본보다 채도가 높게 보였습니다(측정: 같은 사진에서 R +4…+6/255, 회색은 동일). `index.web.ts`에서 버퍼를 sRGB로 유지해 미리보기 = 저장본(채널 평균 차 0.3/255)이 되게 했습니다.
 - **무음 모드**: iOS 셔터음은 기기·지역 정책(예: 한국·일본)상 강제되는 경우가 있습니다. expo-camera의 `shutterSound: false`는 iOS에서 시스템 사운드를 dispose하는 우회 방식이라 **사용하지 않습니다**. 무음 모드는 Lumi 자체 효과음만 끄며(`services/feedback.ts`), 시스템 셔터음은 OS 정책을 따릅니다.
 - **피부 보정**: 얼굴/피부 segmentation 대신 **YCbCr 피부색 범위 마스크 + 엣지 보존(bilateral) 평균**을 사용합니다. 피부색 영역만 부드럽게 하고 눈·머리카락·윤곽은 유지합니다. 2차로 Vision/ML Kit 기반 segmentation 마스크를 셰이더의 `skinMask` 대신 넣을 수 있게 분리되어 있습니다.
 - **비율 촬영**: iOS 센서는 4:3이므로 1:1·16:9는 촬영 후 중앙 크롭하고, 프리뷰는 잘릴 영역을 어둡게 표시합니다.
@@ -336,14 +407,13 @@ macOS에서 같은 Swift 검출 코드(Apple Vision)로 테스트 사진의 랜�
 
 ## 향후 개선
 
-- vision-camera + Skia Frame Processor 기반의 프레임 단위 실시간 필터 (Development Build)
 - 얼굴·피부 segmentation 마스크(배경/머리카락 분리로 윤곽 보정 시 배경 휨 추가 억제)
 - Android 얼굴 랜드마크 백엔드(ML Kit Face Mesh) — `FaceDetectorBackend`만 구현하면 엔진·UI는 그대로
 - 눈 좌/우 개별 보정(엔진은 눈마다 primitive를 따로 만들므로 값만 분리하면 됨)
 - 앨범 다중 선택 후 일괄 편집, 프리셋 복사·붙여넣기
 - 크롭 화면 핀치 줌, 자유 각도 회전(수평 맞추기)
 - VIDEO 모드, Live Photo
-- 사용자 정의 필터 저장, 3D LUT(.cube) 가져오기
+- 3D LUT(.cube) 가져오기, 레시피 공유(내보내기/가져오기)
 - HEIC 저장, Display P3 컬러 유지
 - 다크 모드 테마
 

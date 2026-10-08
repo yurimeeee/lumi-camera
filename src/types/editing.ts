@@ -61,11 +61,46 @@ export interface Geometry {
   aspect: CropAspectId;
 }
 
+/** HSL colour bands, in hue order (see services/color/hsl.ts for their centres). */
+export type HslColor = 'red' | 'orange' | 'yellow' | 'green' | 'aqua' | 'blue' | 'purple' | 'magenta';
+
+/** Per-band HSL shift, each -100…100 (0 = unchanged). */
+export interface HslAdjust {
+  hue: number;
+  saturation: number;
+  luminance: number;
+}
+
+export type HslSettings = Record<HslColor, HslAdjust>;
+
+export type CurveChannel = 'rgb' | 'red' | 'green' | 'blue';
+
+/** Curve control point: input → output, both 0…1. */
+export interface CurvePoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Tone curves. Each channel is a list of control points sorted by x that
+ * always includes an x = 0 and an x = 1 point. `rgb` applies to all three
+ * channels first, then each colour channel is mapped by its own curve.
+ */
+export type CurveSettings = Record<CurveChannel, readonly CurvePoint[]>;
+
 export interface EditState {
   filterId: string;
   /** 0…100 */
   intensity: number;
+  /**
+   * My Recipe the colour values came from (for highlighting only). The values
+   * themselves are copied into this state, so deleting the recipe never
+   * changes an edit.
+   */
+  recipeId: string | null;
   adjustments: Adjustments;
+  hsl: HslSettings;
+  curves: CurveSettings;
   retouch: Retouch;
   geometry: Geometry;
   /** 터치 보정 strokes, in drawing order. */

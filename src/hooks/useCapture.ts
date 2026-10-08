@@ -1,8 +1,10 @@
-import type { CameraView } from 'expo-camera';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
+import type { LiveCameraHandle } from '@/components/camera/LiveCamera';
 import { DEFAULT_RETOUCH } from '@/constants/adjustments';
+import { storeOriginal } from '@/services/appFiles';
+import { pruneStoredOriginals } from '@/services/editProject';
 import { feedback } from '@/services/feedback';
 import {
   applyGeometry,
@@ -19,22 +21,33 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { showToast } from '@/stores/toastStore';
 import type { CaptureRatio } from '@/types/settings';
 
+import type { CameraLook } from './useCameraLook';
+
 interface Options {
-  cameraRef: RefObject<CameraView | null>;
+  cameraRef: RefObject<LiveCameraHandle | null>;
   ready: boolean;
   ratio: CaptureRatio;
-  filterId: string;
+  look: CameraLook;
 }
 
 /**
- * Capture flow: optional countdown → takePicture → upright/resize →
- * ratio crop → open the editor with the camera's look pre-applied.
+ * Capture flow: optional countdown → take photo → upright/resize → mirror
+ * fix → ratio crop → app-owned original → open the result in the editor with
+ * the camera's look (filter or recipe, same intensity) applied
+ * non-destructively. From there the user saves or keeps editing.
  */
-export function useCapture({ cameraRef, ready, ratio, filterId }: Options) {
+export function useCapture({ cameraRef, ready, ratio, look }: Options) {
   const [countdown, setCountdown] = useState(0);
   const [busy, setBusy] = useState(false);
   const [blink, setBlink] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Blocks a second shot before React re-renders with `busy`.
+  const shooting = useRef(false);
+  // A countdown shot uses the look selected when it fires.
+  const lookRef = useRef(look);
+  useEffect(() => {
+    lookRef.current = look;
+  }, [look]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -46,51 +59,53 @@ export function useCapture({ cameraRef, ready, ratio, filterId }: Options) {
 
   const shoot = useCallback(async () => {
     const camera = cameraRef.current;
-    if (!camera) return;
+    if (!camera || shooting.current) return;
+    shooting.current = true;
     const settings = useSettingsStore.getState();
-    const { skin, setLastPhoto } = useCameraStore.getState();
+    const { skin, setLastPhoto, facing } = useCameraStore.getState();
+    const current = lookRef.current;
 
     setBusy(true);
     feedback.shutter();
     setBlink((b) => b + 1);
     try {
       const locationPromise = settings.saveLocation ? getPhotoLocation() : Promise.resolve(null);
-      // The system shutter sound is left to iOS (it is mandatory in some
-      // regions); Lumi does not try to mute it.
-      const picture = await camera.takePictureAsync({ quality: 1, imageType: 'jpg', exif: false });
+      const picture = await camera.takePhoto();
       const takenAt = Date.now();
       const maxSide = settings.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD;
 
+      // EXIF orientation is applied here, so everything after works upright.
       let image = await normalizeImage(picture.uri, maxSide);
+      const wantMirror = facing === 'front' && settings.mirrorFront;
       const aspect = captureAspect(ratio);
-      if (aspect) {
-        image = await applyGeometry(
-          image,
-          { ...DEFAULT_GEOMETRY, crop: centeredCrop(image.width, image.height, aspect) },
-          maxSide,
-        );
+      const crop = aspect ? centeredCrop(image.width, image.height, aspect) : null;
+      if (picture.mirrored !== wantMirror || crop) {
+        image = await applyGeometry(image, { ...DEFAULT_GEOMETRY, flipH: picture.mirrored !== wantMirror, crop }, maxSide);
       }
       const location = await locationPromise;
+      const uri = await storeOriginal(image.uri);
 
-      setLastPhoto(image.uri);
+      setLastPhoto(uri);
       useEditorStore.getState().open(
-        { ...image, origin: 'camera', takenAt, location },
+        { ...image, uri, origin: 'camera', takenAt, location },
         {
-          filterId,
-          intensity: settings.defaultIntensity,
+          ...current.color,
+          recipeId: current.recipeId,
           retouch: { ...DEFAULT_RETOUCH, skin },
           dateStamp: settings.dateStamp,
         },
       );
       router.push('/editor');
+      void pruneStoredOriginals([uri]);
     } catch (e) {
       feedback.error();
       showToast('사진을 찍지 못했어요');
       if (__DEV__) console.warn('[capture]', e);
     } finally {
+      shooting.current = false;
       setBusy(false);
     }
-  }, [cameraRef, ratio, filterId]);
+  }, [cameraRef, ratio]);
 
   const trigger = useCallback(() => {
     if (busy || !ready) return;
@@ -117,5 +132,5 @@ export function useCapture({ cameraRef, ready, ratio, filterId }: Options) {
     }, 1000);
   }, [busy, ready, countdown, clearTimer, shoot]);
 
-  return { trigger, countdown, busy, blink };
+  return { trigger, cancel: clearTimer, countdown, busy, blink };
 }

@@ -7,17 +7,30 @@ import { IconButton } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
 import { SegmentedControl } from '@/components/common/SegmentedControl';
 import { SliderControl } from '@/components/common/SliderControl';
+import { TextPromptDialog } from '@/components/common/TextPromptDialog';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
+import { RecipeActionsSheet } from '@/components/recipes/RecipeActionsSheet';
 import { ADJUST_TOOLS, EFFECT_TOOLS } from '@/constants/adjustments';
 import { aspectRatioOf, CROP_ASPECTS } from '@/constants/crop';
 import { getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography, WEB_SWITCH } from '@/constants/theme';
 import { feedback } from '@/services/feedback';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
-import { useEditorStore } from '@/stores/editorStore';
+import { saveRecipe } from '@/services/recipes';
+import { colorLookOf, useEditorStore } from '@/stores/editorStore';
 import { useIsFavorite, useFilterStore } from '@/stores/filterStore';
+import {
+  getRecipe,
+  parseRecipeLookId,
+  RECIPE_NAME_MAX,
+  recipeLookId,
+  recipeToColorLook,
+  useRecipe,
+  useRecipeStore,
+} from '@/stores/recipeStore';
+import { showToast } from '@/stores/toastStore';
 import type { CropAspectId, SourceImage } from '@/types/editing';
-import type { FilterTab } from '@/types/filters';
+import type { LookTab } from '@/types/filters';
 
 import type { Brush } from './EditorCanvas';
 import { ToolSliderPanel } from './ToolSliderPanel';
@@ -25,22 +38,49 @@ import { ToolSliderPanel } from './ToolSliderPanel';
 export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
-  const { setFilter, setIntensity, commit } = useEditorStore.getState();
-  const [tab, setTab] = useState<FilterTab>('all');
-  const favorite = useIsFavorite(filterId);
+  const recipeId = useEditorStore((s) => s.present.recipeId);
+  const recipe = useRecipe(recipeId);
+  const { setFilter, setIntensity, commit, applyLook } = useEditorStore.getState();
+  const [tab, setTab] = useState<LookTab>('all');
+  const [managing, setManaging] = useState<string | null>(null);
+  const [naming, setNaming] = useState(false);
+  const filterFavorite = useIsFavorite(filterId);
   const filter = getFilter(filterId);
+  const favorite = recipe ? recipe.favorite : filterFavorite;
+  const selectedId = recipe ? recipeLookId(recipe.id) : filterId;
+
+  const onSelect = useCallback(
+    (id: string) => {
+      const rid = parseRecipeLookId(id);
+      const r = rid ? getRecipe(rid) : null;
+      if (r) applyLook(recipeToColorLook(r), r.id);
+      else setFilter(id);
+    },
+    [applyLook, setFilter],
+  );
+
+  const saveAsRecipe = async (name: string) => {
+    const { present } = useEditorStore.getState();
+    const id = await saveRecipe(name, colorLookOf(present), thumbImage);
+    // The photo now uses this recipe; highlight it without adding an undo step.
+    useEditorStore.setState((s) => ({ present: { ...s.present, recipeId: id }, committed: { ...s.committed, recipeId: id } }));
+    feedback.success();
+    showToast(`‘${name}’ 레시피를 저장했어요`);
+  };
 
   return (
     <View>
-      {filterId !== 'original' ? (
+      {filterId !== 'original' || recipe ? (
         <View style={styles.intensityRow}>
-          <Text style={styles.filterName}>{filter.name}</Text>
+          <Text style={styles.filterName} numberOfLines={1}>
+            {recipe ? recipe.name : filter.name}
+          </Text>
           <View style={styles.flex}>
             <SliderControl
               value={intensity}
               onChange={setIntensity}
               onComplete={commit}
-              resetValue={80}
+              resetValue={recipe ? recipe.intensity : 80}
               accessibilityLabel="필터 강도"
             />
           </View>
@@ -51,21 +91,52 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
             accessibilityLabel={favorite ? '즐겨찾기 해제' : '즐겨찾기'}
             onPress={() => {
               feedback.light();
-              useFilterStore.getState().toggleFavorite(filterId);
+              if (recipe) useRecipeStore.getState().toggleFavorite(recipe.id);
+              else useFilterStore.getState().toggleFavorite(filterId);
             }}
+          />
+          <IconButton
+            icon="bookmark-outline"
+            color={colors.textSecondary}
+            size={18}
+            accessibilityLabel="지금 보정을 레시피로 저장 (Save as Recipe)"
+            onPress={() => setNaming(true)}
           />
         </View>
       ) : (
-        <Text style={styles.hint}>필터를 골라 분위기를 입혀보세요</Text>
+        <View style={styles.intensityRow}>
+          <Text style={[styles.hint, styles.flex]}>필터를 골라 분위기를 입혀보세요</Text>
+          <IconButton
+            icon="bookmark-outline"
+            color={colors.textSecondary}
+            size={18}
+            accessibilityLabel="지금 보정을 레시피로 저장 (Save as Recipe)"
+            onPress={() => setNaming(true)}
+          />
+        </View>
       )}
       <FilterCarousel
-        selectedId={filterId}
-        onSelect={setFilter}
+        selectedId={selectedId}
+        onSelect={onSelect}
         image={thumbImage}
         tab={tab}
         onTabChange={setTab}
         thumbWidth={56}
         thumbHeight={70}
+        onRecipeLongPress={setManaging}
+        onAddRecipe={() => setNaming(true)}
+      />
+      <RecipeActionsSheet recipeId={managing} onClose={() => setManaging(null)} onApply={(id) => onSelect(recipeLookId(id))} />
+      <TextPromptDialog
+        visible={naming}
+        title="레시피로 저장"
+        message="필터·조정·HSL·커브 값을 저장해 다른 사진에도 쓸 수 있어요. 자르기와 얼굴 보정은 포함되지 않아요."
+        initialValue={`My Recipe ${useRecipeStore.getState().recipes.length + 1}`}
+        placeholder="예: Warm Diary"
+        confirmText="저장"
+        maxLength={RECIPE_NAME_MAX}
+        onSubmit={saveAsRecipe}
+        onClose={() => setNaming(false)}
       />
     </View>
   );

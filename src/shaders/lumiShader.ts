@@ -1,6 +1,7 @@
 import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
 
 import { MAX_SPOTS } from '@/services/blemish';
+import { HSL_CENTERS, HSL_MAX_HUE_SHIFT } from '@/services/color/hsl';
 import { FACE_WARP_SKSL } from '@/services/faceWarp/shader';
 import { RESHAPE_RANGE } from '@/services/reshape';
 
@@ -10,7 +11,8 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * Order of operations:
  *   face warp → retouch (skin-tone masked) → local detail → exposure/brightness →
  *   white balance → highlights/shadows → contrast → saturation/vibrance →
- *   split tone → glow → fade → vignette → grain
+ *   HSL (per colour) → split tone → tone curves (LUT) → glow → fade →
+ *   vignette → grain
  *
  * All radii are expressed in "uPixel" units (1/1000 of the image's short side)
  * so the on-screen preview and the full-resolution export look the same.
@@ -27,11 +29,94 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * strokes are drawn on what the user sees. Vignette and grain use the
  * unwarped position.
  */
+const deg = (v: number) => (v / 360).toFixed(6);
+const C = HSL_CENTERS;
+/** [band index, centre, previous centre, next centre] in hue order (0…1 turns). */
+const BANDS = [
+  [0, C.red, C.magenta - 360, C.orange],
+  [1, C.orange, C.red, C.yellow],
+  [2, C.yellow, C.orange, C.green],
+  [3, C.green, C.yellow, C.aqua],
+  [4, C.aqua, C.green, C.blue],
+  [5, C.blue, C.aqua, C.purple],
+  [6, C.purple, C.blue, C.magenta],
+  [7, C.magenta, C.purple, C.red + 360],
+] as const;
+
+/**
+ * HSL per colour band, mirrored on the CPU by applyHslCpu (tests). Weights
+ * fall off with smoothstep to the neighbouring band centres, so they sum to
+ * 1 everywhere; near-grey pixels are gated out.
+ */
+const HSL_SKSL = `
+float3 rgb2hsl(float3 c) {
+  float mx = max(c.r, max(c.g, c.b));
+  float mn = min(c.r, min(c.g, c.b));
+  float l = (mx + mn) * 0.5;
+  float d = mx - mn;
+  if (d < 1e-6) return float3(0.0, 0.0, l);
+  float s = d / (1.0 - abs(2.0 * l - 1.0) + 1e-6);
+  float h;
+  if (mx == c.r) h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+  else h = (c.r - c.g) / d + 4.0;
+  return float3(fract(h / 6.0), s, l);
+}
+
+float3 hsl2rgb(float3 hsl) {
+  float3 k = clamp(abs(mod(hsl.x * 6.0 + float3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  float c = (1.0 - abs(2.0 * hsl.z - 1.0)) * hsl.y;
+  return hsl.z + c * (k - 0.5);
+}
+
+// Weight of a band centred at ce (turns) with neighbours at pr and nx.
+float bandWeight(float h, float ce, float pr, float nx) {
+  float d = h - ce;
+  d -= floor(d + 0.5);
+  return d < 0.0 ? 1.0 - smoothstep(0.0, ce - pr, -d) : 1.0 - smoothstep(0.0, nx - ce, d);
+}
+
+float3 applyHsl(float3 c) {
+  float chroma = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+  float gate = smoothstep(0.02, 0.18, chroma);
+  if (gate <= 0.0) return c;
+  float3 hsl = rgb2hsl(c);
+  float3 adj = float3(0.0);
+${BANDS.map(([i, ce, pr, nx]) => `  adj += uHsl[${i}] * bandWeight(hsl.x, ${deg(ce)}, ${deg(pr)}, ${deg(nx)});`).join('\n')}
+  adj *= gate;
+  float s = clamp(hsl.y * (1.0 + adj.y), 0.0, 1.0);
+  float3 o = hsl2rgb(float3(fract(hsl.x + adj.x * ${deg(HSL_MAX_HUE_SHIFT)}), s, hsl.z));
+  float a = adj.z * 0.35;
+  return a > 0.0 ? o + (1.0 - o) * a : o * (1.0 + a);
+}
+
+// Linear interpolation between the LUT's byte entries (texel centres are
+// exact, whatever sampling the child shader uses).
+float curveAt(float v, int ch) {
+  float x = clamp(v, 0.0, 1.0) * 255.0;
+  float i0 = floor(x);
+  float i1 = min(i0 + 1.0, 255.0);
+  half4 a = curveLut.eval(float2(i0 + 0.5, 0.5));
+  half4 b = curveLut.eval(float2(i1 + 0.5, 0.5));
+  float f = x - i0;
+  if (ch == 0) return mix(float(a.r), float(b.r), f);
+  if (ch == 1) return mix(float(a.g), float(b.g), f);
+  return mix(float(a.b), float(b.b), f);
+}
+
+float3 applyCurves(float3 c) {
+  return float3(curveAt(c.r, 0), curveAt(c.g, 1), curveAt(c.b, 2));
+}
+`;
+
 export const LUMI_SKSL = `
 uniform shader image;
 // 터치 보정 displacement, x and y: R = high byte, G = low byte of 0…1.
 uniform shader dispX;
 uniform shader dispY;
+// Tone curves: 256×1 RGB lookup (services/color/curves.ts).
+uniform shader curveLut;
+uniform float uCurvesOn;
 uniform float uReshape;
 uniform float2 uResolution;
 uniform float uPixel;
@@ -66,6 +151,10 @@ uniform float uSpotCount;
 uniform float3 uShadowTint;
 uniform float3 uHighlightTint;
 uniform float uSplit;
+
+// HSL: per band (hue, saturation, luminance) in -1…1; see services/color/hsl.ts.
+uniform float3 uHsl[8];
+uniform float uHslOn;
 
 const float3 LUMA = float3(0.2126, 0.7152, 0.0722);
 
@@ -113,6 +202,7 @@ float3 ringBlur(float2 xy, float radius) {
   return sum / 8.0;
 }
 
+${HSL_SKSL}
 ${FACE_WARP_SKSL}
 float decode16(half4 c) {
   return (float(c.r) * 65280.0 + float(c.g) * 255.0) / 65535.0;
@@ -272,11 +362,15 @@ half4 main(float2 pos) {
   l = luma(c);
   c = mix(float3(l), c, 1.0 + uVibrance * (1.0 - smoothstep(0.0, 0.6, sat)));
 
+  if (uHslOn > 0.5) c = applyHsl(clamp(c, 0.0, 1.0));
+
   if (uSplit > 0.0) {
     l = clamp(luma(c), 0.0, 1.0);
     c += (uShadowTint - 0.5) * (1.0 - l) * uSplit * 0.5;
     c += (uHighlightTint - 0.5) * l * uSplit * 0.5;
   }
+
+  if (uCurvesOn > 0.5) c = applyCurves(c);
 
   // ── Effects ────────────────────────────────────────────────
   if (uGlow > 0.0) {

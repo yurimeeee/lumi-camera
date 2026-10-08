@@ -9,6 +9,8 @@ import {
 } from '@shopify/react-native-skia';
 import { memo } from 'react';
 
+import { curveTexture, identityCurveTexture } from '@/services/color/curveTexture';
+import { LUT_SIZE } from '@/services/color/curves';
 import { neutralReshapeTextures, type ReshapeTextures } from '@/services/reshape';
 import { getLumiEffect } from '@/shaders/lumiShader';
 
@@ -20,6 +22,9 @@ import { getLumiEffect } from '@/shaders/lumiShader';
 const SAMPLING = MitchellCubicSampling;
 /** B-spline: smooth and never overshoots, so the 16-bit byte pairs stay in 0…1. */
 const FIELD_SAMPLING = { B: 1, C: 0 } as const;
+/** Interpolating cubic: exact at texel centres, which is all the shader reads from the curve LUT. */
+const LUT_SAMPLING = { B: 0, C: 0 } as const;
+const LUT_RECT = { x: 0, y: 0, width: LUT_SIZE, height: 1 };
 
 interface Props {
   image: SkImage;
@@ -31,6 +36,8 @@ interface Props {
   uniforms: Uniforms | null;
   /** 터치 보정 displacement field for this frame. */
   reshape?: ReshapeTextures | null;
+  /** Composed tone curves (ResolvedProcessing.curves); null = linear. */
+  curves?: Float32Array | null;
 }
 
 /**
@@ -39,18 +46,20 @@ interface Props {
  * Always drawn at the origin (the shader's vignette/grain use local
  * coordinates); position it with a parent <Group transform>.
  */
-export const LumiLayer = memo(function LumiLayer({ image, width, height, fit = 'fill', uniforms, reshape }: Props) {
+export const LumiLayer = memo(function LumiLayer({ image, width, height, fit = 'fill', uniforms, reshape, curves }: Props) {
   if (!uniforms) {
     return <SkiaImage image={image} x={0} y={0} width={width} height={height} fit={fit} sampling={SAMPLING} />;
   }
   const rect = { x: 0, y: 0, width, height };
   const field = reshape ?? neutralReshapeTextures();
+  const lut = (curves && curveTexture(curves)) || identityCurveTexture();
   return (
     <Rect x={0} y={0} width={width} height={height}>
       <Shader source={getLumiEffect()} uniforms={{ ...uniforms, uReshape: reshape ? 1 : 0 }}>
         <ImageShader image={image} fit={fit} rect={rect} tx="clamp" ty="clamp" sampling={SAMPLING} />
         <ImageShader image={field.x} fit="fill" rect={rect} tx="clamp" ty="clamp" sampling={FIELD_SAMPLING} />
         <ImageShader image={field.y} fit="fill" rect={rect} tx="clamp" ty="clamp" sampling={FIELD_SAMPLING} />
+        <ImageShader image={lut} fit="fill" rect={LUT_RECT} tx="clamp" ty="clamp" sampling={LUT_SAMPLING} />
       </Shader>
     </Rect>
   );

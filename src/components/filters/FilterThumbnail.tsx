@@ -5,38 +5,68 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { PressableScale } from '@/components/common/PressableScale';
 import { colors, radius, typography } from '@/constants/theme';
-import { useFilterThumbnail } from '@/hooks/useFilterThumbnail';
+import { useLookThumbnail } from '@/hooks/useFilterThumbnail';
+import type { Look } from '@/services/imageProcessing';
 import type { FilterDefinition } from '@/types/filters';
 
-interface Props {
-  filter: FilterDefinition;
+interface BaseProps {
   image: SkImage | null;
   selected: boolean;
   onPress: (id: string) => void;
+  onLongPress?: (id: string) => void;
   width?: number;
   height?: number;
   tone?: 'light' | 'dark';
 }
 
+interface Props extends BaseProps {
+  filter: FilterDefinition;
+}
+
 /** A real, shader-rendered preview of `filter` applied to `image`. */
-export const FilterThumbnail = memo(function FilterThumbnail({
-  filter,
+export const FilterThumbnail = memo(function FilterThumbnail({ filter, ...rest }: Props) {
+  return <LookThumbnail id={filter.id} name={filter.name} kindLabel="필터" look={null} {...rest} />;
+});
+
+interface LookProps extends BaseProps {
+  /** Carousel id (filter id, or recipe:<id>). Also the thumbnail cache key. */
+  id: string;
+  name: string;
+  /** Spoken after the name ("필터", "레시피"). */
+  kindLabel: string;
+  /** Look to render; null = the filter `id` at 100. */
+  look: Look | null;
+  /** Small marker for My Recipes. */
+  badge?: 'recipe';
+}
+
+/** Shader-rendered thumbnail of any look (filter or My Recipe). */
+export const LookThumbnail = memo(function LookThumbnail({
+  id,
+  name,
+  kindLabel,
+  look,
+  badge,
   image,
   selected,
   onPress,
+  onLongPress,
   width = 60,
   height = 76,
   tone = 'light',
-}: Props) {
-  const uri = useFilterThumbnail(image, filter.id, width, height);
+}: LookProps) {
+  const uri = useLookThumbnail(image, id, look, width, height);
   const dark = tone === 'dark';
 
   return (
     <PressableScale
-      onPress={() => onPress(filter.id)}
+      onPress={() => onPress(id)}
+      onLongPress={onLongPress ? () => onLongPress(id) : undefined}
+      delayLongPress={350}
       activeScale={0.95}
       accessibilityRole="button"
-      accessibilityLabel={`${filter.name} 필터`}
+      accessibilityLabel={`${name} ${kindLabel}`}
+      accessibilityHint={onLongPress ? '길게 누르면 이름 변경·삭제' : undefined}
       accessibilityState={{ selected }}
       style={styles.root}
     >
@@ -53,6 +83,7 @@ export const FilterThumbnail = memo(function FilterThumbnail({
           ) : (
             <View style={[styles.placeholder, dark && styles.placeholderDark]} />
           )}
+          {badge === 'recipe' ? <View style={styles.badge} /> : null}
         </View>
       </View>
       <Text
@@ -63,7 +94,7 @@ export const FilterThumbnail = memo(function FilterThumbnail({
         ]}
         numberOfLines={1}
       >
-        {filter.name}
+        {name}
       </Text>
     </PressableScale>
   );
@@ -89,6 +120,17 @@ const styles = StyleSheet.create({
   clip: {
     borderRadius: radius.md,
     overflow: 'hidden',
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.white,
   },
   placeholder: {
     flex: 1,

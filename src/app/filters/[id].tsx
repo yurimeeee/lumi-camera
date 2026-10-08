@@ -15,15 +15,15 @@ import { useAppDimensions } from '@/hooks/useAppDimensions';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { LumiLayer } from '@/render/LumiLayer';
 import { feedback } from '@/services/feedback';
-import { uniformsFor } from '@/services/imageProcessing';
+import { lookRender } from '@/services/imageProcessing';
 import { useCameraStore } from '@/stores/cameraStore';
 import { useFilterStore, useIsFavorite } from '@/stores/filterStore';
-import type { FilterTab } from '@/types/filters';
+import type { LookTab } from '@/types/filters';
 
 export default function FilterDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const [id, setId] = useState(params.id ?? 'original');
-  const [tab, setTab] = useState<FilterTab>('all');
+  const [tab, setTab] = useState<LookTab>('all');
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useAppDimensions();
   const filter = getFilter(id);
@@ -34,10 +34,7 @@ export default function FilterDetailScreen() {
 
   const width = screenW;
   const height = Math.min(Math.round(width * 1.25), screenH - 300 - insets.bottom);
-  const uniforms = useMemo(
-    () => (filter.id === 'original' ? null : uniformsFor(filter.id, 100, width, height)),
-    [filter.id, width, height],
-  );
+  const look = useMemo(() => lookRender({ filterId: filter.id, intensity: 100 }, width, height), [filter.id, width, height]);
 
   const applyToCamera = () => {
     useCameraStore.getState().setFilter(filter.id);
@@ -50,7 +47,7 @@ export default function FilterDetailScreen() {
       <View style={[styles.hero, { height }]}>
         {big ? (
           <Canvas style={{ width, height }}>
-            <LumiLayer image={big} width={width} height={height} fit="cover" uniforms={uniforms} />
+            <LumiLayer image={big} width={width} height={height} fit="cover" uniforms={look.uniforms} curves={look.curves} />
           </Canvas>
         ) : null}
         <View style={[styles.top, { paddingTop: insets.top + spacing.xs }]}>
@@ -78,7 +75,14 @@ export default function FilterDetailScreen() {
       </View>
 
       <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-        <FilterCarousel selectedId={filter.id} onSelect={setId} image={thumbs} tab={tab} onTabChange={setTab} />
+        <FilterCarousel
+          selectedId={filter.id}
+          onSelect={setId}
+          image={thumbs}
+          tab={tab}
+          onTabChange={setTab}
+          showRecipes={false}
+        />
         <View style={styles.actions}>
           <PressableScale style={[styles.action, styles.secondary]} onPress={() => router.push('/library')} accessibilityRole="button">
             <Ionicons name="images-outline" size={18} color={colors.text} />

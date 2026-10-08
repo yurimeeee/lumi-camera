@@ -1,4 +1,4 @@
-import { Group, ImageFormat, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
+import { Group, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
@@ -7,10 +7,11 @@ import { DateStampLayer } from '@/render/DateStampLayer';
 import { LumiLayer } from '@/render/LumiLayer';
 import { renderOffscreen } from '@/render/offscreen';
 import type { EditState, SourceImage } from '@/types/editing';
-import type { DateFormat } from '@/types/settings';
+import type { DateFormat, ExportFormat, JpegQuality } from '@/types/settings';
 import { formatDateStamp } from '@/utils/dateStamp';
 
 import { withExif } from './exif';
+import { encodeExport } from './exportEncoding';
 import { hasFaceEdits } from '@/constants/faceRetouch';
 
 import { detectFaces } from './faceDetection/FaceDetector';
@@ -23,6 +24,9 @@ import type { GeoPoint } from './location';
 
 export interface ExportOptions {
   highQuality: boolean;
+  format: ExportFormat;
+  /** JPEG only. */
+  quality: JpegQuality;
   dateFormat: DateFormat;
   stampTypeface: SkTypeface | null;
   location?: GeoPoint | null;
@@ -37,16 +41,16 @@ export async function loadSkImage(uri: string): Promise<SkImage> {
   return image;
 }
 
-function writeJpeg(bytes: Uint8Array, prefix: string): string {
+function writeImage(bytes: Uint8Array, prefix: string, format: ExportFormat = 'jpeg'): string {
   if (isWeb) {
     // No file system on web: hand back a data URL for download.
     let bin = '';
     for (let i = 0; i < bytes.length; i += 0x8000) {
       bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
     }
-    return `data:image/jpeg;base64,${btoa(bin)}`;
+    return `data:image/${format};base64,${btoa(bin)}`;
   }
-  const file = new File(Paths.cache, `${prefix}-${Date.now()}.jpg`);
+  const file = new File(Paths.cache, `${prefix}-${Date.now()}.${format === 'png' ? 'png' : 'jpg'}`);
   file.create({ overwrite: true });
   file.write(bytes);
   return file.uri;
@@ -59,7 +63,6 @@ function writeJpeg(bytes: Uint8Array, prefix: string): string {
  */
 export async function renderEdit(source: SourceImage, edit: EditState, opts: ExportOptions): Promise<ImageFile> {
   const maxSide = opts.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD;
-  const quality = opts.highQuality ? 95 : 85;
 
   const base = await applyGeometry(source, edit.geometry, maxSide);
   const image = await loadSkImage(base.uri);
@@ -71,6 +74,8 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
     intensity: edit.intensity,
     adjustments: edit.adjustments,
     retouch: edit.retouch,
+    hsl: edit.hsl,
+    curves: edit.curves,
   });
   // Face retouch: the same source landmarks the preview used (cached per
   // image), mapped through this export's geometry and evaluated at full
@@ -95,7 +100,14 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
 
   const rendered = await renderOffscreen(
     <Group>
-      <LumiLayer image={image} width={width} height={height} uniforms={uniforms} reshape={reshape} />
+      <LumiLayer
+        image={image}
+        width={width}
+        height={height}
+        uniforms={uniforms}
+        reshape={reshape}
+        curves={processing.curves}
+      />
       {stamp && opts.stampTypeface ? (
         <DateStampLayer text={stamp} typeface={opts.stampTypeface} width={width} height={height} />
       ) : null}
@@ -108,12 +120,12 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   if (!rendered) throw new Error('사진을 렌더링하지 못했어요.');
 
   const raster = rendered.makeNonTextureImage() ?? rendered;
-  const jpeg = raster.encodeToBytes(ImageFormat.JPEG, quality);
-  if (!jpeg || jpeg.length === 0) throw new Error('사진을 인코딩하지 못했어요.');
-
-  const tagged = withExif(jpeg, { takenAt: source.takenAt, location: opts.location });
-  return { uri: writeJpeg(tagged, 'lumi'), width, height };
+  const bytes = encodeExport(raster, opts.format, opts.quality);
+  // EXIF (date, optional GPS) is written for JPEG; PNG carries no EXIF here.
+  const out = opts.format === 'jpeg' ? withExif(bytes, { takenAt: source.takenAt, location: opts.location }) : bytes;
+  return { uri: writeImage(out, 'lumi', opts.format), width, height };
 }
+
 
 /**
  * Unfiltered copy of a capture (already ratio-cropped and upright) tagged with
@@ -122,5 +134,5 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
 export async function prepareOriginal(source: SourceImage, location?: GeoPoint | null): Promise<string> {
   if (isWeb) return source.uri;
   const bytes = await new File(source.uri).bytes();
-  return writeJpeg(withExif(bytes, { takenAt: source.takenAt, location }), 'lumi-original');
+  return writeImage(withExif(bytes, { takenAt: source.takenAt, location }), 'lumi-original');
 }

@@ -1,17 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LIVE_CAMERA, LiveCamera, type LiveCameraHandle } from '@/components/camera/LiveCamera';
 import {
   Countdown,
+  FocusIndicator,
   GridOverlay,
-  LiveFilterOverlay,
   ProcessingBadge,
   RatioMask,
   ShutterBlink,
@@ -22,20 +23,29 @@ import { ShutterButton } from '@/components/camera/ShutterButton';
 import { IconButton } from '@/components/common/IconButton';
 import { PermissionView } from '@/components/common/PermissionView';
 import { PressableScale } from '@/components/common/PressableScale';
+import { SliderControl } from '@/components/common/SliderControl';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
-import { FLASH_OPTIONS, labelOf, nextOf, RATIO_OPTIONS } from '@/constants/camera';
+import { RecipeActionsSheet } from '@/components/recipes/RecipeActionsSheet';
+import { FLASH_OPTIONS, labelOf, nextOf, RATIO_OPTIONS, TIMER_OPTIONS } from '@/constants/camera';
 import { getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { useAppDimensions } from '@/hooks/useAppDimensions';
+import { useCameraLook } from '@/hooks/useCameraLook';
 import { useCapture } from '@/hooks/useCapture';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
+import { clearProject, loadProject, pruneStoredOriginals, restoreProject, type EditProject } from '@/services/editProject';
 import { feedback } from '@/services/feedback';
+import { isIdentity } from '@/services/imageProcessing';
 import { captureAspect } from '@/services/imagePipeline';
-import { useCameraFilterId, useCameraStore, useCaptureRatio } from '@/stores/cameraStore';
+import { useCameraStore, useCaptureRatio } from '@/stores/cameraStore';
+import { getRecipe, parseRecipeLookId } from '@/stores/recipeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { showToast } from '@/stores/toastStore';
+import { confirmAction } from '@/utils/dialogs';
 
 const BOTTOM_MIN = 268;
+/** Exposure control hides after this long without interaction. */
+const EXPOSURE_IDLE_MS = 3500;
 
 function fitFrame(boxW: number, boxH: number, aspect: number | null): Frame {
   if (!aspect) return { x: 0, y: 0, width: boxW, height: boxH };
@@ -48,44 +58,125 @@ function fitFrame(boxW: number, boxH: number, aspect: number | null): Frame {
   return { x: (boxW - width) / 2, y: (boxH - height) / 2, width, height };
 }
 
+const filterName = (id: string) => getFilter(id).name;
+
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useAppDimensions();
   const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<LiveCameraHandle>(null);
   const [ready, setReady] = useState(false);
   const [focused, setFocused] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [intensityOpen, setIntensityOpen] = useState(false);
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number; id: number } | null>(null);
+  const [exposureOpen, setExposureOpen] = useState(false);
+  const exposureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [managing, setManaging] = useState<string | null>(null);
+  const [project, setProject] = useState<EditProject | null>(null);
 
   const facing = useCameraStore((s) => s.facing);
   const flash = useCameraStore((s) => s.flash);
+  const timer = useCameraStore((s) => s.timer);
   const grid = useCameraStore((s) => s.grid);
   const filterTab = useCameraStore((s) => s.filterTab);
   const lastPhotoUri = useCameraStore((s) => s.lastPhotoUri);
+  const exposure = useCameraStore((s) => s.exposureBias);
   const mirrorFront = useSettingsStore((s) => s.mirrorFront);
   const ratio = useCaptureRatio();
-  const filterId = useCameraFilterId();
-  const filter = getFilter(filterId);
-  const { setFilter, setFilterTab, setFlash, setRatio, toggleFacing } = useCameraStore.getState();
+  const look = useCameraLook(filterName);
+  const { setFilter, setRecipe, setIntensity, setFilterTab, setFlash, setTimer, setGrid, setRatio, toggleFacing, setExposureBias } =
+    useCameraStore.getState();
 
   const previewImage = usePreviewImage(lastPhotoUri);
-  const { trigger, countdown, busy, blink } = useCapture({ cameraRef, ready, ratio, filterId });
+  const { trigger, cancel, countdown, busy, blink } = useCapture({ cameraRef, ready, ratio, look });
 
   useFocusEffect(
     useCallback(() => {
       setFocused(true);
+      // An edit left unfinished (app closed or killed) can be picked up again.
+      let alive = true;
+      loadProject()
+        .then((p) => alive && setProject(p))
+        .catch(() => undefined);
       return () => {
+        alive = false;
         setFocused(false);
         setPanelOpen(false);
       };
     }, []),
   );
 
+  // Housekeeping once per launch: drop app-owned originals nothing refers to.
+  useEffect(() => {
+    void pruneStoredOriginals([useCameraStore.getState().lastPhotoUri]);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (exposureTimer.current) clearTimeout(exposureTimer.current);
+    },
+    [],
+  );
+
   const previewH = Math.min(Math.round((screenW * 4) / 3), screenH - BOTTOM_MIN - insets.bottom);
   const frame = useMemo(() => fitFrame(screenW, previewH, captureAspect(ratio)), [screenW, previewH, ratio]);
   const granted = permission?.granted ?? false;
 
-  const onSelectFilter = useCallback((id: string) => setFilter(id), [setFilter]);
+  const onSelectLook = useCallback(
+    (id: string) => {
+      const rid = parseRecipeLookId(id);
+      if (rid && getRecipe(rid)) setRecipe(rid);
+      else setFilter(id);
+      if (id === 'original') setIntensityOpen(false);
+    },
+    [setFilter, setRecipe],
+  );
+
+  const keepExposureOpen = useCallback(() => {
+    if (exposureTimer.current) clearTimeout(exposureTimer.current);
+    exposureTimer.current = setTimeout(() => setExposureOpen(false), EXPOSURE_IDLE_MS);
+  }, []);
+
+  const onPreviewTap = (e: GestureResponderEvent) => {
+    if (!LIVE_CAMERA.focus || !ready || countdown > 0) return;
+    const { locationX: x, locationY: y } = e.nativeEvent;
+    setFocusPoint({ x, y, id: Date.now() });
+    feedback.selection();
+    cameraRef.current?.focusAt(x, y).catch(() => undefined);
+    if (LIVE_CAMERA.exposure) {
+      setExposureOpen(true);
+      keepExposureOpen();
+    }
+  };
+
+  const flip = () => {
+    feedback.light();
+    setExposureBias(0);
+    setFocusPoint(null);
+    toggleFacing();
+  };
+
+  const resume = () => {
+    if (!project) return;
+    restoreProject(project);
+    setProject(null);
+    router.push('/editor');
+  };
+
+  const discardProject = () =>
+    confirmAction({
+      title: '편집하던 사진을 지울까요?',
+      message: '저장하지 않은 편집 내용이 사라져요. 원본 사진은 그대로예요.',
+      confirmText: '지우기',
+      destructive: true,
+      onConfirm: () => {
+        setProject(null);
+        void clearProject().then(() => pruneStoredOriginals([useCameraStore.getState().lastPhotoUri]));
+      },
+    });
+
+  const lookLabel = look.name ? `${look.name}${look.intensity !== 100 ? ` ${look.intensity}` : ''}` : null;
 
   return (
     <View style={styles.root}>
@@ -94,23 +185,28 @@ export default function CameraScreen() {
       <View style={[styles.preview, { height: previewH }]}>
         {granted ? (
           <>
-            <CameraView
+            <LiveCamera
               ref={cameraRef}
-              style={StyleSheet.absoluteFill}
               facing={facing}
               flash={flash}
-              mirror={facing === 'front' && mirrorFront}
+              mirror={mirrorFront}
               active={focused}
-              animateShutter={false}
-              onCameraReady={() => setReady(true)}
-              onMountError={() => showToast('카메라를 시작하지 못했어요')}
+              look={isIdentity(look.processing) ? null : look.processing}
+              filterId={look.color.filterId}
+              exposure={exposure}
+              onReady={() => setReady(true)}
+              onError={(m) => showToast(m)}
             />
-            <View pointerEvents="none" style={[styles.frameClip, frame]}>
-              <LiveFilterOverlay key={filter.id} layers={filter.preview} />
-            </View>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={onPreviewTap}
+              disabled={!LIVE_CAMERA.focus}
+              accessibilityLabel="탭해서 초점 맞추기"
+            />
             <RatioMask frame={frame} width={screenW} height={previewH} />
             {grid ? <GridOverlay frame={frame} /> : null}
-            {countdown > 0 ? <Countdown value={countdown} /> : null}
+            <FocusIndicator point={focusPoint} />
+            {countdown > 0 ? <Countdown value={countdown} onCancel={cancel} /> : null}
             <ShutterBlink id={blink} />
             {busy ? <ProcessingBadge /> : null}
           </>
@@ -139,14 +235,30 @@ export default function CameraScreen() {
               setFlash(nextOf(FLASH_OPTIONS, flash));
             }}
           />
+          <PressableScale
+            style={styles.textButton}
+            onPress={() => {
+              feedback.selection();
+              setTimer(nextOf(TIMER_OPTIONS, timer));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`타이머 ${timer ? `${timer}초` : '끔'}`}
+          >
+            <Ionicons name="timer-outline" size={20} color={timer ? colors.accentSoft : colors.white} />
+            {timer ? <Text style={styles.textButtonValue}>{timer}s</Text> : null}
+          </PressableScale>
           <IconButton
-            icon={panelOpen ? 'chevron-up' : 'chevron-down'}
-            color={colors.white}
-            accessibilityLabel={panelOpen ? '촬영 옵션 닫기' : '촬영 옵션 열기'}
-            onPress={() => setPanelOpen((v) => !v)}
+            icon={grid ? 'grid' : 'grid-outline'}
+            color={grid ? colors.white : colors.whiteMuted}
+            size={20}
+            accessibilityLabel={`격자 ${grid ? '켜짐' : '꺼짐'}`}
+            onPress={() => {
+              feedback.selection();
+              setGrid(!grid);
+            }}
           />
           <PressableScale
-            style={styles.ratioPill}
+            style={styles.textButton}
             onPress={() => {
               feedback.selection();
               setRatio(nextOf(RATIO_OPTIONS, ratio));
@@ -156,6 +268,12 @@ export default function CameraScreen() {
           >
             <Text style={styles.ratioText}>{labelOf(RATIO_OPTIONS, ratio)}</Text>
           </PressableScale>
+          <IconButton
+            icon={panelOpen ? 'chevron-up' : 'chevron-down'}
+            color={colors.white}
+            accessibilityLabel={panelOpen ? '촬영 옵션 닫기' : '촬영 옵션 더 보기'}
+            onPress={() => setPanelOpen((v) => !v)}
+          />
           <IconButton
             icon="settings-outline"
             color={colors.white}
@@ -170,23 +288,68 @@ export default function CameraScreen() {
           </View>
         ) : null}
 
-        {filter.id !== 'original' ? (
-          <Animated.View
-            key={filter.id}
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(150)}
-            style={styles.filterTag}
-            pointerEvents="none"
-          >
-            <Text style={styles.filterTagText}>{filter.name}</Text>
-          </Animated.View>
-        ) : null}
+        <View style={styles.previewBottom} pointerEvents="box-none">
+          {exposureOpen && !intensityOpen ? (
+            <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(200)} style={styles.bar}>
+              <Ionicons name="sunny-outline" size={16} color={colors.white} />
+              <View style={styles.flex}>
+                <SliderControl
+                  value={Math.round(exposure * 100)}
+                  min={-100}
+                  max={100}
+                  onChange={(v) => {
+                    setExposureBias(v / 100);
+                    keepExposureOpen();
+                  }}
+                  resetValue={0}
+                  tone="dark"
+                  showValue={false}
+                  accessibilityLabel="노출 보정"
+                />
+              </View>
+            </Animated.View>
+          ) : null}
+          {intensityOpen && look.name ? (
+            <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(150)} style={styles.bar}>
+              <Text style={styles.barLabel} numberOfLines={1}>
+                {look.name}
+              </Text>
+              <View style={styles.flex}>
+                <SliderControl
+                  value={look.intensity}
+                  onChange={setIntensity}
+                  resetValue={useSettingsStore.getState().defaultIntensity}
+                  tone="dark"
+                  accessibilityLabel="필터 강도"
+                />
+              </View>
+            </Animated.View>
+          ) : lookLabel ? (
+            <Animated.View key={look.lookId} entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} pointerEvents="none">
+              <Text style={styles.filterTagText}>{lookLabel}</Text>
+              {!LIVE_CAMERA.frameFilter ? <Text style={styles.approx}>미리보기는 근사치 · 촬영본에 정확히 적용</Text> : null}
+            </Animated.View>
+          ) : null}
+        </View>
       </View>
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + spacing.sm }]}>
+        {project ? (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.resume}>
+            <PressableScale style={styles.resumeMain} onPress={resume} accessibilityRole="button" accessibilityLabel="편집하던 사진 이어서 편집">
+              <Ionicons name="time-outline" size={16} color={colors.text} />
+              <Text style={styles.resumeText}>편집하던 사진이 있어요</Text>
+              <Text style={styles.resumeAction}>이어서 편집</Text>
+            </PressableScale>
+            <IconButton icon="close" size={16} color={colors.textSecondary} accessibilityLabel="편집하던 사진 지우기" onPress={discardProject} />
+          </Animated.View>
+        ) : null}
+
         <FilterCarousel
-          selectedId={filter.id}
-          onSelect={onSelectFilter}
+          selectedId={look.lookId}
+          onSelect={onSelectLook}
+          onReselect={() => setIntensityOpen((v) => !v)}
+          onRecipeLongPress={setManaging}
           image={previewImage}
           tab={filterTab}
           onTabChange={setFilterTab}
@@ -222,13 +385,12 @@ export default function CameraScreen() {
             variant="soft"
             accessibilityLabel="전면/후면 카메라 전환"
             disabled={!granted}
-            onPress={() => {
-              feedback.light();
-              toggleFacing();
-            }}
+            onPress={flip}
           />
         </View>
       </View>
+
+      <RecipeActionsSheet recipeId={managing} onClose={() => setManaging(null)} />
     </View>
   );
 }
@@ -238,15 +400,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  flex: {
+    flex: 1,
+  },
   preview: {
     width: '100%',
     backgroundColor: colors.ink,
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
-    overflow: 'hidden',
-  },
-  frameClip: {
-    position: 'absolute',
     overflow: 'hidden',
   },
   topBar: {
@@ -257,13 +418,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
   },
-  ratioPill: {
+  textButton: {
     minWidth: 44,
     minHeight: 44,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
+  },
+  textButtonValue: {
+    ...typography.micro,
+    color: colors.accentSoft,
+    fontWeight: '600',
   },
   ratioText: {
     ...typography.caption,
@@ -276,10 +444,26 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-  filterTag: {
+  previewBottom: {
     position: 'absolute',
-    bottom: spacing.lg,
     left: spacing.lg,
+    right: spacing.lg,
+    bottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(28, 26, 24, 0.55)',
+  },
+  barLabel: {
+    ...typography.overline,
+    color: colors.whiteSoft,
+    maxWidth: 96,
   },
   filterTagText: {
     ...typography.overline,
@@ -287,10 +471,43 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.25)',
     textShadowRadius: 6,
   },
+  approx: {
+    ...typography.micro,
+    color: colors.whiteMuted,
+    marginTop: 2,
+  },
   bottom: {
     flex: 1,
     justifyContent: 'space-between',
     paddingTop: spacing.md,
+  },
+  resume: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+    paddingLeft: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  resumeMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 40,
+  },
+  resumeText: {
+    ...typography.caption,
+    color: colors.text,
+    flex: 1,
+  },
+  resumeAction: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '600',
   },
   modes: {
     flexDirection: 'row',

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import type { CameraFacing, CaptureRatio, FlashSetting, TimerSetting } from '@/types/settings';
-import type { FilterTab } from '@/types/filters';
+import type { LookTab } from '@/types/filters';
 
 import { useSettingsStore } from './settingsStore';
 import { persistStorage } from './storage';
@@ -18,7 +18,13 @@ interface CameraState {
   skin: number;
   /** Session value — starts from the "default filter" setting on launch. */
   filterId: string | null;
-  filterTab: FilterTab;
+  /** My Recipe used instead of `filterId` when set. */
+  recipeId: string | null;
+  /** Session filter/recipe strength 0…100 — starts from the "default intensity" setting. */
+  intensity: number | null;
+  /** Exposure bias in EV (live camera only), reset when the camera restarts. */
+  exposureBias: number;
+  filterTab: LookTab;
   /** Most recent capture/import, used for the gallery thumbnail and filter previews. */
   lastPhotoUri: string | null;
 }
@@ -31,7 +37,10 @@ interface CameraActions {
   setRatio: (v: CaptureRatio) => void;
   setSkin: (v: number) => void;
   setFilter: (id: string) => void;
-  setFilterTab: (tab: FilterTab) => void;
+  setRecipe: (id: string) => void;
+  setIntensity: (v: number) => void;
+  setExposureBias: (v: number) => void;
+  setFilterTab: (tab: LookTab) => void;
   setLastPhoto: (uri: string) => void;
 }
 
@@ -45,6 +54,9 @@ export const useCameraStore = create<CameraState & CameraActions>()(
       ratio: null,
       skin: 20,
       filterId: null,
+      recipeId: null,
+      intensity: null,
+      exposureBias: 0,
       filterTab: 'all',
       lastPhotoUri: null,
       toggleFacing: () => set((s) => ({ facing: s.facing === 'back' ? 'front' : 'back' })),
@@ -53,7 +65,10 @@ export const useCameraStore = create<CameraState & CameraActions>()(
       setGrid: (grid) => set({ grid }),
       setRatio: (ratio) => set({ ratio }),
       setSkin: (skin) => set({ skin }),
-      setFilter: (filterId) => set({ filterId }),
+      setFilter: (filterId) => set({ filterId, recipeId: null }),
+      setRecipe: (recipeId) => set({ recipeId }),
+      setIntensity: (intensity) => set({ intensity }),
+      setExposureBias: (exposureBias) => set({ exposureBias }),
       setFilterTab: (filterTab) => set({ filterTab }),
       setLastPhoto: (lastPhotoUri) => set({ lastPhotoUri }),
     }),
@@ -78,4 +93,11 @@ export function useCameraFilterId(): string {
   const id = useCameraStore((s) => s.filterId);
   const fallback = useSettingsStore((s) => s.defaultFilterId);
   return id ?? fallback;
+}
+
+/** Effective camera intensity (0…100). */
+export function useCameraIntensity(): number {
+  const v = useCameraStore((s) => s.intensity);
+  const fallback = useSettingsStore((s) => s.defaultIntensity);
+  return v ?? fallback;
 }

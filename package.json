@@ -29,9 +29,14 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
+    "react-native-nitro-image": "^0.15.2",
+    "react-native-nitro-modules": "^0.37.1",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-vision-camera": "^5.2.3",
+    "react-native-vision-camera-skia": "^5.2.3",
+    "react-native-vision-camera-worklets": "^5.2.3",
     "react-native-web": "^0.21.2",
     "react-native-worklets": "0.10.1",
     "zustand": "^5.0.15"
@@ -49,11 +54,13 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/face-warp",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/face-warp && tsc --noEmit -p scripts/image-engine",
     "lint": "expo lint",
     "doctor": "npx expo-doctor",
     "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js",
-    "check:face-warp": "bun --preload ./scripts/face-warp/stubs.ts scripts/face-warp/check.ts"
+    "check:face-warp": "bun --preload ./scripts/face-warp/stubs.ts scripts/face-warp/check.ts",
+    "test:engine": "bun test --preload ./scripts/image-engine/stubs.ts scripts/image-engine",
+    "test:engine:update": "UPDATE_GOLDEN=1 bun test --preload ./scripts/image-engine/stubs.ts scripts/image-engine"
   },
   "private": true
 }

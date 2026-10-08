@@ -24,6 +24,9 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '따뜻하고 부드러운 무드의 필터',
     params: { temperature: 16, warmth: 18, contrast: -10, highlights: -14, shadows: 8, saturation: -6, fade: 12 },
     splitTone: { shadows: [0.52, 0.48, 0.46], highlights: [0.62, 0.52, 0.42], amount: 40 },
+    // Soft shoulder: highlights roll off gently, shadows open a touch.
+    curves: { rgb: [{ x: 0, y: 0.03 }, { x: 0.3, y: 0.32 }, { x: 0.78, y: 0.76 }, { x: 1, y: 0.96 }] },
+    hsl: { orange: { saturation: -6, luminance: 6 }, green: { saturation: -14 } },
     preview: [{ color: '#F2B98A', blend: 'soft-light', opacity: 0.38 }],
   },
   {
@@ -54,6 +57,12 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '복숭아빛 볼처럼 화사한 핑크',
     params: { brightness: 8, temperature: 10, tint: 12, warmth: 10, contrast: -6, saturation: 4 },
     splitTone: { shadows: [0.54, 0.47, 0.5], highlights: [0.62, 0.5, 0.48], amount: 45 },
+    // Pink highlights, lifted (low-contrast) blacks, bright skin.
+    curves: {
+      rgb: [{ x: 0, y: 0.05 }, { x: 0.5, y: 0.52 }, { x: 1, y: 1 }],
+      red: [{ x: 0, y: 0 }, { x: 0.7, y: 0.74 }, { x: 1, y: 1 }],
+    },
+    hsl: { orange: { hue: -6, saturation: -4, luminance: 14 }, red: { hue: 8, luminance: 6 } },
     preview: [{ color: '#F6B3A1', blend: 'soft-light', opacity: 0.42 }],
   },
   {
@@ -89,6 +98,9 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '해가 진 직후의 푸른 시간',
     params: { temperature: -34, tint: -2, contrast: 8, shadows: -6, saturation: -8, vignette: 16 },
     splitTone: { shadows: [0.4, 0.47, 0.64], highlights: [0.48, 0.5, 0.6], amount: 60 },
+    // Blue lifted into the shadows.
+    curves: { blue: [{ x: 0, y: 0.08 }, { x: 0.4, y: 0.45 }, { x: 1, y: 0.97 }] },
+    hsl: { blue: { saturation: 10, luminance: -6 }, orange: { saturation: -18 } },
     preview: [{ color: '#7E95C9', blend: 'soft-light', opacity: 0.5 }],
   },
   {
@@ -98,6 +110,7 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '바닷바람처럼 산뜻한 청량감',
     params: { brightness: 10, temperature: -10, tint: -4, highlights: -10, vibrance: 12, fade: 6 },
     splitTone: { shadows: [0.46, 0.52, 0.54], highlights: [0.52, 0.53, 0.5], amount: 30 },
+    hsl: { aqua: { saturation: 16, luminance: 8 }, blue: { hue: -8, saturation: 8 } },
     preview: [{ color: '#A6D8D8', blend: 'soft-light', opacity: 0.4 }],
   },
 
@@ -109,6 +122,13 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '35mm 필름 특유의 입자와 색',
     params: { contrast: 12, temperature: 6, saturation: -6, fade: 14, grain: 28, vignette: 18 },
     splitTone: { shadows: [0.44, 0.52, 0.53], highlights: [0.58, 0.53, 0.45], amount: 50 },
+    // Film toe and shoulder: faded black, compressed white, warm highlights.
+    curves: {
+      rgb: [{ x: 0, y: 0.07 }, { x: 0.25, y: 0.22 }, { x: 0.75, y: 0.8 }, { x: 1, y: 0.94 }],
+      red: [{ x: 0, y: 0 }, { x: 0.75, y: 0.78 }, { x: 1, y: 1 }],
+      blue: [{ x: 0, y: 0.04 }, { x: 0.75, y: 0.72 }, { x: 1, y: 0.96 }],
+    },
+    hsl: { green: { hue: 10, saturation: -16 }, blue: { hue: -6, saturation: -10 } },
     preview: [
       { color: '#3E6E6A', blend: 'soft-light', opacity: 0.22 },
       { color: '#F0C48E', blend: 'soft-light', opacity: 0.28 },
@@ -121,6 +141,7 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '오래된 앨범 속 먼지 쌓인 색감',
     params: { contrast: -10, temperature: 6, tint: 4, saturation: -28, fade: 24, grain: 14 },
     splitTone: { shadows: [0.52, 0.49, 0.48], highlights: [0.55, 0.52, 0.48], amount: 35 },
+    curves: { rgb: [{ x: 0, y: 0.08 }, { x: 1, y: 0.92 }] },
     preview: [
       { color: '#9C8C80', blend: 'saturation', opacity: 0.3 },
       { color: '#D9C2AE', blend: 'soft-light', opacity: 0.38 },
@@ -133,6 +154,8 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '인물 피부를 곱게 담는 컬러 네거티브',
     params: { warmth: 10, highlights: -14, shadows: 10, contrast: -4, saturation: -6, vibrance: 10, grain: 10 },
     splitTone: { shadows: [0.49, 0.5, 0.52], highlights: [0.6, 0.53, 0.46], amount: 40 },
+    curves: { rgb: [{ x: 0, y: 0.04 }, { x: 0.25, y: 0.24 }, { x: 0.75, y: 0.77 }, { x: 1, y: 0.97 }] },
+    hsl: { orange: { saturation: -10, luminance: 10 }, red: { saturation: -8 }, green: { hue: 8, saturation: -12 } },
     preview: [{ color: '#EDBE97', blend: 'soft-light', opacity: 0.32 }],
   },
   {
@@ -163,6 +186,8 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '크림처럼 포근하고 밝은 톤',
     params: { brightness: 12, temperature: 8, contrast: -18, highlights: -10, saturation: -10, fade: 16, glow: 10 },
     splitTone: { shadows: [0.53, 0.5, 0.47], highlights: [0.57, 0.54, 0.48], amount: 35 },
+    curves: { rgb: [{ x: 0, y: 0.06 }, { x: 0.5, y: 0.55 }, { x: 1, y: 0.98 }] },
+    hsl: { orange: { luminance: 8 }, yellow: { saturation: -10 } },
     preview: [
       { color: '#FBEBD5', blend: 'soft-light', opacity: 0.5 },
       { color: '#FFF8EE', blend: 'screen', opacity: 0.14 },
@@ -195,6 +220,8 @@ export const FILTERS: readonly FilterDefinition[] = [
     category: 'bw',
     description: '깊은 그림자의 하이 콘트라스트 흑백',
     params: { saturation: -100, contrast: 30, shadows: -12, vignette: 22, grain: 12 },
+    // Deep S-curve.
+    curves: { rgb: [{ x: 0, y: 0 }, { x: 0.25, y: 0.17 }, { x: 0.75, y: 0.85 }, { x: 1, y: 1 }] },
     preview: [
       { color: '#808080', blend: 'saturation', opacity: 1 },
       { color: '#3A3A3A', blend: 'soft-light', opacity: 0.35 },
@@ -215,6 +242,7 @@ export const FILTERS: readonly FilterDefinition[] = [
     description: '은빛으로 반짝이는 부드러운 흑백',
     params: { saturation: -100, brightness: 8, contrast: -6, highlights: -10, fade: 18 },
     splitTone: { shadows: [0.48, 0.5, 0.53], highlights: [0.51, 0.5, 0.49], amount: 25 },
+    curves: { rgb: [{ x: 0, y: 0.05 }, { x: 0.6, y: 0.64 }, { x: 1, y: 0.97 }] },
     preview: [
       { color: '#808080', blend: 'saturation', opacity: 1 },
       { color: '#FFFFFF', blend: 'screen', opacity: 0.12 },

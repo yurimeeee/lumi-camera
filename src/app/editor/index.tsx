@@ -19,6 +19,8 @@ import {
   toBrush,
   TouchPanel,
 } from '@/components/editor/panels';
+import { CurvesPanel } from '@/components/editor/CurvesPanel';
+import { HslPanel } from '@/components/editor/HslPanel';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
 import { aspectRatioOf } from '@/constants/crop';
 import { hasFaceEdits } from '@/constants/faceRetouch';
@@ -45,6 +47,7 @@ export default function EditorScreen() {
   const [brush, setBrush] = useState(DEFAULT_BRUSH);
   const brushTool = useMemo(() => toBrush(brush), [brush]);
   const pastLength = useEditorStore((s) => s.past.length);
+  const restored = useEditorStore((s) => s.restored);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   const cropping = tool === 'crop';
@@ -74,7 +77,7 @@ export default function EditorScreen() {
       if (router.canGoBack()) router.back();
       else router.replace('/');
     };
-    if (canUndo && savedAt !== pastLength) {
+    if ((canUndo || restored) && savedAt !== pastLength) {
       confirmAction({
         title: '편집을 그만할까요?',
         message: '저장하지 않은 편집 내용은 사라져요.',
@@ -86,7 +89,7 @@ export default function EditorScreen() {
     } else {
       done();
     }
-  }, [canUndo, savedAt, pastLength]);
+  }, [canUndo, restored, savedAt, pastLength]);
 
   const onSave = async () => {
     if (await save()) setSavedAt(useEditorStore.getState().past.length);
@@ -116,7 +119,8 @@ export default function EditorScreen() {
             icon="refresh-circle-outline"
             size={21}
             accessibilityLabel="모든 편집 초기화"
-            disabled={!canUndo}
+            // A restored project has edits but no history yet.
+            disabled={!canUndo && !restored}
             onPress={() =>
               confirmAction({ title: '모든 편집을 초기화할까요?', confirmText: '초기화', destructive: true, onConfirm: resetAll })
             }
@@ -186,6 +190,8 @@ export default function EditorScreen() {
         <Animated.View key={tool} entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)} style={styles.panelBody}>
           {tool === 'filter' ? <FilterPanel thumbImage={thumbImage} /> : null}
           {tool === 'adjust' ? <AdjustPanel /> : null}
+          {tool === 'hsl' ? <HslPanel /> : null}
+          {tool === 'curves' ? <CurvesPanel /> : null}
           {tool === 'retouch' ? (
             <RetouchPanel
               faceStatus={faceStatus}

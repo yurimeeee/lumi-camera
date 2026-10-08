@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -71,15 +71,44 @@ export const LiveFilterOverlay = memo(function LiveFilterOverlay({ layers }: { l
   );
 });
 
-export function Countdown({ value }: { value: number }) {
+/** Big countdown; tapping anywhere on it cancels the shot. */
+export function Countdown({ value, onCancel }: { value: number; onCancel: () => void }) {
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center]}>
+    <Pressable
+      onPress={onCancel}
+      style={[StyleSheet.absoluteFill, styles.center]}
+      accessibilityRole="button"
+      accessibilityLabel={`${value}초 후 촬영, 눌러서 취소`}
+    >
       <Animated.Text key={value} entering={ZoomIn.duration(220)} exiting={FadeOut.duration(150)} style={styles.count}>
         {value}
       </Animated.Text>
-    </View>
+      <Text style={styles.hint}>탭해서 취소</Text>
+    </Pressable>
   );
 }
+
+/** Focus square at the tapped point; re-animates whenever `id` changes. */
+export function FocusIndicator({ point }: { point: { x: number; y: number; id: number } | null }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    if (!point) return;
+    scale.set(1.35);
+    scale.set(withTiming(1, { duration: 220 }));
+    opacity.set(withSequence(withTiming(1, { duration: 80 }), withTiming(1, { duration: 1100 }), withTiming(0, { duration: 300 })));
+  }, [point, scale, opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scale: scale.value }] }));
+  if (!point) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.focus, { left: point.x - FOCUS / 2, top: point.y - FOCUS / 2 }, style]}
+    />
+  );
+}
+
+const FOCUS = 68;
 
 /** Brief white blink on capture; re-triggers whenever `id` changes. */
 export function ShutterBlink({ id }: { id: number }) {
@@ -121,6 +150,20 @@ const styles = StyleSheet.create({
     color: colors.white,
     textShadowColor: 'rgba(0,0,0,0.25)',
     textShadowRadius: 12,
+  },
+  focus: {
+    position: 'absolute',
+    width: FOCUS,
+    height: FOCUS,
+    borderWidth: 1.5,
+    borderColor: '#F6D98A',
+    borderRadius: 4,
+  },
+  hint: {
+    marginTop: 4,
+    fontSize: 12,
+    color: colors.whiteSoft,
+    letterSpacing: 0.4,
   },
   blink: {
     backgroundColor: 'rgba(255,255,255,0.75)',
