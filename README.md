@@ -190,16 +190,16 @@ Info.plist 문구는 `app.json`의 config plugin 옵션에 한국어로 정의�
 
 ## 얼굴 보정 (Retouch)
 
-편집 화면 `보정` 탭: **Skin · Face · Eyes · Nose · Lips · Proportion**. 카테고리를 고르면 아이콘·이름·값이 있는 가로 목록이 나오고, 하나를 고르면 위쪽 슬라이더로 조절합니다. 각 카테고리마다 `Reset Face/Eyes/Nose/Lips/Proportion`, 전체는 `Reset All`.
+편집 화면 `보정` 탭: **피부 · 얼굴형 · 눈 · 코 · 입 · 비율**. 카테고리를 고르면 아이콘·이름·값이 있는 가로 목록이 나오고, 하나를 고르면 위쪽 슬라이더로 조절합니다. 카테고리마다 `얼굴형/눈/코/입/비율 초기화`, 얼굴 보정 전체는 `전체 초기화`.
 
 | 카테고리 | 컨트롤 (범위) |
 | --- | --- |
-| Skin | Soften, Smooth, Tone(±), Glow, Detail — 피부색 마스크 기반(기존 기능, 얼굴 인식 불필요) |
-| Face | Slim, Width(±), Jaw, Chin(±), V-Line, Cheek, Forehead(±) |
-| Eyes | Eye Size(±), Eye Width(±, 눈 가로 길이), Eye Height(±), Eye Distance(±), Eye Position(±), Outer Corner(±, 눈꼬리) |
-| Nose | Slim Nose, Nose Width(±), Nose Tip(±), Nose Size(±), Nose Length(±), Nose Wing(콧볼) |
-| Lips | Lip Size(±), Lip Width(±), Upper Lip(±), Lower Lip(±), Mouth Position(±, + = 위로), Smile |
-| Proportion | Midface(±, 중안부), Face Length(±), Upper Face(±, 이마 높이), Lower Face(±, 하안부), Eye/Nose/Mouth Position(±) |
+| 피부 | 피부결, 잡티 완화, 톤 보정(±), 광채, 디테일 — 피부색 마스크 기반(얼굴 인식 불필요) |
+| 얼굴형 | 갸름하게(Slim), 얼굴 너비(±), 턱(Jaw), 턱끝(±), V라인, 광대, 이마(±) |
+| 눈 | 눈 크기(±), 눈 길이(±, Eye Width), 눈 높이(±), 눈 사이(±), 눈 위치(±), 눈꼬리(±) |
+| 코 | 콧대, 코 너비(±), 코끝(±), 코 크기(±), 코 길이(±), 콧볼(Nose Wing) |
+| 입 | 입술 크기(±), 입 너비(±, Lip Width), 윗입술(±), 아랫입술(±), 입 위치(±, + = 위로), 미소 |
+| 비율 | 중안부(±, Midface), 얼굴 길이(±), 상안부(±, 이마 높이), 하안부(±), 눈/코/입 위치(±) |
 
 0 … 100 컨트롤은 0이 원본, ± 컨트롤은 가운데(0)가 원본입니다. 슬라이더 0에서는 워프 계획 자체가 만들어지지 않아 **원본과 비트 단위로 같습니다**(검증: 픽셀 차이 0).
 

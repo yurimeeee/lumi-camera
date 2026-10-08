@@ -51,11 +51,11 @@ function faceNote(status: FaceStatus, faceCount: number): string {
 }
 
 const CATEGORY_NAME: Record<FaceCategory, string> = {
-  face: 'Face',
-  eyes: 'Eyes',
-  nose: 'Nose',
-  lips: 'Lips',
-  proportion: 'Proportion',
+  face: '얼굴형',
+  eyes: '눈',
+  nose: '코',
+  lips: '입',
+  proportion: '비율',
 };
 
 /**
@@ -130,9 +130,9 @@ export function RetouchPanel({ faceStatus, faceCount, selectedFaceId, debugLandm
           disabled={!ready || !categoryEdited}
           style={[styles.textButton, (!ready || !categoryEdited) && styles.textButtonDisabled]}
           accessibilityRole="button"
-          accessibilityLabel={`Reset ${CATEGORY_NAME[category]}`}
+          accessibilityLabel={`${CATEGORY_NAME[category]} 초기화`}
         >
-          <Text style={styles.textButtonLabel}>Reset {CATEGORY_NAME[category]}</Text>
+          <Text style={styles.textButtonLabel}>{CATEGORY_NAME[category]} 초기화</Text>
         </PressableScale>
         <PressableScale
           onPress={() => {
@@ -142,9 +142,9 @@ export function RetouchPanel({ faceStatus, faceCount, selectedFaceId, debugLandm
           disabled={!anyFaceEdits}
           style={[styles.textButton, !anyFaceEdits && styles.textButtonDisabled]}
           accessibilityRole="button"
-          accessibilityLabel="Reset All"
+          accessibilityLabel="얼굴 보정 전체 초기화"
         >
-          <Text style={styles.textButtonLabel}>Reset All</Text>
+          <Text style={styles.textButtonLabel}>전체 초기화</Text>
         </PressableScale>
       </View>
     </View>
