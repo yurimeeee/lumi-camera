@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
-import { DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
+import { completeFaceRetouch, DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
 import { aspectRatioOf } from '@/constants/crop';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
 import { DEFAULT_CURVES } from '@/services/color/curves';
@@ -18,6 +18,7 @@ import type {
   HslSettings,
   CropAspectId,
   EditState,
+  FaceAnchor,
   FaceRetouch,
   FaceRetouchKey,
   Geometry,
@@ -54,9 +55,16 @@ export function createEditState(partial?: Partial<EditState>): EditState {
     reshape: [],
     spots: [],
     faces: {},
+    faceAnchors: {},
     dateStamp: false,
     ...partial,
-  };
+    // Fields added in later versions (restored projects) get their defaults.
+    ...(partial?.retouch ? { retouch: { ...DEFAULT_RETOUCH, ...partial.retouch } } : null),
+    ...(partial?.faces
+      ? { faces: Object.fromEntries(Object.entries(partial.faces).map(([id, r]) => [id, completeFaceRetouch(r)])) }
+      : null),
+    ...(partial?.faceAnchors ? null : { faceAnchors: {} }),
+  } as EditState;
 }
 
 /** The colour part of an edit — what a My Recipe stores. */
@@ -91,8 +99,12 @@ interface EditorActions {
   setIntensity: (value: number) => void;
   setAdjustment: (key: AdjustmentKey, value: number) => void;
   setRetouch: (key: RetouchKey, value: number) => void;
-  /** Face retouch for one detected face (live; `commit()` when the slider is released). */
-  setFaceRetouch: (faceId: string, key: FaceRetouchKey, value: number) => void;
+  /**
+   * Face retouch for one detected face (live; `commit()` when the slider is
+   * released). `anchor` records where the face is the first time it's edited,
+   * so a later re-detection can find it again (services/faceDetection/faceIdentity).
+   */
+  setFaceRetouch: (faceId: string, key: FaceRetouchKey, value: number, anchor?: FaceAnchor) => void;
   /** HSL for one colour band (live; `commit()` on release). */
   setHsl: (color: HslColor, key: keyof HslAdjust, value: number) => void;
   /** Curve points for one channel (live while dragging; `commit()` on release). */
@@ -177,11 +189,13 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       set((s) => ({ present: { ...s.present, adjustments: { ...s.present.adjustments, [key]: value } } })),
     setRetouch: (key, value) =>
       set((s) => ({ present: { ...s.present, retouch: { ...s.present.retouch, [key]: value } } })),
-    setFaceRetouch: (faceId, key, value) =>
+    setFaceRetouch: (faceId, key, value, anchor) =>
       set((s) => {
         const prev: FaceRetouch = s.present.faces[faceId] ?? DEFAULT_FACE_RETOUCH;
         if (prev[key] === value) return s;
-        return { present: { ...s.present, faces: { ...s.present.faces, [faceId]: { ...prev, [key]: value } } } };
+        const anchors = s.present.faceAnchors;
+        const faceAnchors = anchor && !anchors[faceId] ? { ...anchors, [faceId]: anchor } : anchors;
+        return { present: { ...s.present, faces: { ...s.present.faces, [faceId]: { ...prev, [key]: value } }, faceAnchors } };
       }),
     setHsl: (color, key, value) =>
       set((s) => {

@@ -38,6 +38,8 @@ export const MAX_EYE_DISTANCE_SHIFT = 0.07;
 export const MAX_EYE_POSITION_SHIFT = 0.018;
 /** Share of the eye width the outer corner rises / drops. */
 export const MAX_OUTER_CORNER_SHIFT = 0.07;
+/** Eye tilt about its centre, radians (≈ 5°). */
+export const MAX_EYE_ANGLE = 0.085;
 
 // ── Nose ───────────────────────────────────────────────────────
 export const MAX_NOSE_SLIM_SCALE = 0.2;
@@ -48,6 +50,8 @@ export const MAX_NOSE_SIZE_SCALE = 0.11;
 /** Share of the nose length (nasion → base). */
 export const MAX_NOSE_LENGTH_SHIFT = 0.07;
 export const MAX_NOSE_POSITION_SHIFT = 0.06;
+/** Nostrils narrow / widen toward the nose's midline. */
+export const MAX_NOSTRIL_SCALE = 0.12;
 
 // ── Lips ───────────────────────────────────────────────────────
 export const MAX_LIP_SIZE_SCALE = 0.12;
@@ -58,6 +62,10 @@ export const MAX_LOWER_LIP_SCALE = 0.18;
 export const MAX_MOUTH_POSITION_SHIFT = 0.024;
 /** Share of the mouth half-width the corners lift. */
 export const MAX_SMILE_SHIFT = 0.1;
+/** Share of the mouth half-width the corners move up / down (no widening). */
+export const MAX_MOUTH_CORNER_SHIFT = 0.085;
+/** Philtrum: share of L the mouth moves, absorbed above the chin. */
+export const MAX_PHILTRUM_SHIFT = 0.03;
 
 // ── Safety nets (applied after everything is summed) ───────────
 /** Contour inward/outward ratio after summing all face controls. */
@@ -78,3 +86,8 @@ export const MAX_BAND_STRETCH = 0.2;
  * rim (measured on the actual falloff curve, see `rimSafeK`).
  */
 export const MAX_SCALE_DISTORTION = 0.33;
+/**
+ * Rotation primitives: shear in the rim is |θ| · r · |w′(r)| (more on an
+ * elongated ellipse); kept under this.
+ */
+export const MAX_ROTATE_SHEAR = 0.22;

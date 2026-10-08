@@ -1,4 +1,4 @@
-import { isNeutralFace } from '@/constants/faceRetouch';
+import { completeFaceRetouch, isNeutralFace } from '@/constants/faceRetouch';
 import type { DetectedFace, FaceLandmarks, Point } from '@/services/faceDetection/types';
 import { sourceToFrame } from '@/services/frameCoords';
 import type { FaceRetouch, Geometry } from '@/types/editing';
@@ -76,7 +76,7 @@ export function prepareFaceInputs(
   for (const face of faces) {
     const retouch = edits[face.id];
     if (!retouch || isNeutralFace(retouch)) continue;
-    out.push({ id: face.id, landmarks: mapLandmarks(face.landmarks, (p) => sourceToFrame(p, geometry)), retouch });
+    out.push({ id: face.id, landmarks: mapLandmarks(face.landmarks, (p) => sourceToFrame(p, geometry)), retouch: completeFaceRetouch(retouch) });
   }
   return out.slice(0, MAX_WARP_FACES);
 }
@@ -223,6 +223,12 @@ export function primBackward(p: Vec, q: Prim): Vec {
   if (r >= 1) return p;
   const w = 1 - smoothstep(q.core, 1, r);
   if (q.kind === 'move') return { x: p.x - (q.move?.x ?? 0) * w, y: p.y - (q.move?.y ?? 0) * w };
+  if (q.kind === 'rotate') {
+    const th = -(q.angle ?? 0) * w;
+    const cs = Math.cos(th);
+    const sn = Math.sin(th);
+    return { x: q.c.x + dx * cs - dy * sn, y: q.c.y + dx * sn + dy * cs };
+  }
   const sa = a * (1 - (q.kx ?? 0) * w);
   const sb = b * (1 - (q.ky ?? 0) * w);
   return { x: q.c.x + ax.x * sa + ay.x * sb, y: q.c.y + ax.y * sa + ay.y * sb };
@@ -315,6 +321,7 @@ export function faceWarpUniforms(plan: FaceWarpPlan | null): FaceWarpUniforms {
     u.uPrimA.splice(i * 4, 4, q.c.x, q.c.y, q.rx, q.ryUp);
     u.uPrimB.splice(i * 4, 4, q.axis.x, q.axis.y, q.ryDown, q.core);
     if (q.kind === 'move') u.uPrimC.splice(i * 4, 4, 0, q.move?.x ?? 0, q.move?.y ?? 0, 0);
+    else if (q.kind === 'rotate') u.uPrimC.splice(i * 4, 4, 2, q.angle ?? 0, 0, 0);
     else u.uPrimC.splice(i * 4, 4, 1, q.kx ?? 0, q.ky ?? 0, 0);
   });
   return u;

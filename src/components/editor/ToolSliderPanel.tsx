@@ -20,14 +20,37 @@ interface Props<K extends string> {
   note?: string | ((key: K) => string | undefined);
   /** Greys out the slider and tool values (e.g. face tools without a face). */
   disabled?: boolean;
+  /** Greys out single tools (e.g. tools that need a face, in a mixed list). */
+  isDisabled?: (key: K) => boolean;
+  /** Selected tool, when the parent wants to know it (uncontrolled otherwise). */
+  active?: K;
+  onActiveChange?: (key: K) => void;
 }
 
 /** Icon strip of tools + one slider for the selected tool, with per-tool reset. */
-export function ToolSliderPanel<K extends string>({ tools, values, onChange, onCommit, onReset, footer, note, disabled = false }: Props<K>) {
-  const [active, setActive] = useState<K>(tools[0]!.key);
+export function ToolSliderPanel<K extends string>({
+  tools,
+  values,
+  onChange,
+  onCommit,
+  onReset,
+  footer,
+  note,
+  disabled: allDisabled = false,
+  isDisabled,
+  active: activeProp,
+  onActiveChange,
+}: Props<K>) {
+  const [activeState, setActiveState] = useState<K>(tools[0]!.key);
+  const active = activeProp ?? activeState;
+  const setActive = (key: K) => {
+    setActiveState(key);
+    onActiveChange?.(key);
+  };
   const spec = tools.find((t) => t.key === active) ?? tools[0]!;
   const value = values[spec.key];
   const hint = typeof note === 'function' ? note(spec.key) : note;
+  const disabled = allDisabled || (isDisabled?.(spec.key) ?? false);
 
   return (
     <View>
@@ -59,6 +82,7 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
         {tools.map((t) => {
           const selected = t.key === spec.key;
           const changed = values[t.key] !== 0;
+          const off = allDisabled || (isDisabled?.(t.key) ?? false);
           return (
             <PressableScale
               key={t.key}
@@ -71,7 +95,7 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
               accessibilityLabel={`${t.label} ${values[t.key]}`}
               accessibilityState={{ selected }}
             >
-              <View style={[styles.toolIcon, selected && styles.toolIconSelected, disabled && styles.disabled]}>
+              <View style={[styles.toolIcon, selected && styles.toolIconSelected, off && styles.disabled]}>
                 <Ionicons name={t.icon} size={20} color={selected ? colors.text : colors.textSecondary} />
               </View>
               <Text style={[styles.toolLabel, selected && styles.toolLabelSelected]} numberOfLines={1}>
@@ -84,7 +108,14 @@ export function ToolSliderPanel<K extends string>({ tools, values, onChange, onC
           );
         })}
       </ScrollView>
-      {hint ? <Text style={styles.note}>{hint}</Text> : null}
+      {/* A per-tool hint keeps a fixed two-line box, so switching tools never resizes the photo. */}
+      {typeof note === 'function' ? (
+        <Text style={[styles.note, styles.noteFixed]} numberOfLines={2}>
+          {hint ?? ''}
+        </Text>
+      ) : hint ? (
+        <Text style={styles.note}>{hint}</Text>
+      ) : null}
       {footer}
     </View>
   );
@@ -160,5 +191,9 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xs,
+  },
+  noteFixed: {
+    lineHeight: 15,
+    height: 30,
   },
 });

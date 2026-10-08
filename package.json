@@ -59,6 +59,7 @@
     "doctor": "npx expo-doctor",
     "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js",
     "check:face-warp": "bun --preload ./scripts/face-warp/stubs.ts scripts/face-warp/check.ts",
+    "render:face-retouch": "bun --preload ./scripts/image-engine/stubs.ts scripts/face-warp/render.ts",
     "test:engine": "bun test --preload ./scripts/image-engine/stubs.ts scripts/image-engine",
     "test:engine:update": "UPDATE_GOLDEN=1 bun test --preload ./scripts/image-engine/stubs.ts scripts/image-engine"
   },

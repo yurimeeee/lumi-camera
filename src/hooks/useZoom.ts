@@ -37,7 +37,18 @@ export interface Zoom {
   zoomBy: (factor: number, fx: number, fy: number) => void;
   panBy: (dx: number, dy: number) => void;
   reset: () => void;
+  /**
+   * Frames a photo rect (photo px) — or the whole photo for null — unless the
+   * user has zoomed, panned or fitted by hand since automatic framing was
+   * (re)armed: their view always wins.
+   */
+  focusOn: (target: { x: number; y: number; width: number; height: number } | null) => void;
+  /** Allows automatic framing again (e.g. on entering a tool that uses it), if the photo is at fit. */
+  rearm: () => void;
 }
+
+/** Automatic framing never zooms in further than this. */
+const MAX_FOCUS_ZOOM = 3.2;
 
 function clampOffset(t: number, size: number, scale: number) {
   'worklet';
@@ -85,6 +96,8 @@ export function useZoom(
   const focal = useSharedValue({ x: 0, y: 0, t: 0, vx: 0, vy: 0 });
   /** Web wheel zoom glides toward this target instead of jumping per notch. */
   const wheel = useRef({ s: 1, x: 0, y: 0, at: 0 });
+  /** Automatic framing may move the view; false once the user zooms / pans / fits by hand. */
+  const auto = useSharedValue(true);
   const [zoomed, setZoomed] = useState(false);
 
   useAnimatedReaction(
@@ -99,7 +112,8 @@ export function useZoom(
     scale.set(1);
     x.set(0);
     y.set(0);
-  }, [width, height, enabled, scale, x, y]);
+    auto.set(true);
+  }, [width, height, enabled, scale, x, y, auto]);
 
   const apply = (s: number, tx: number, ty: number) => {
     'worklet';
@@ -157,6 +171,7 @@ export function useZoom(
     .onBegin(() => grab())
     .onStart((e) => {
       grab();
+      auto.set(false);
       // Divide out the scale already reached at activation so nothing jumps.
       start.set({
         scale: scale.value / e.scale,
@@ -209,6 +224,7 @@ export function useZoom(
     })
     .onUpdate((e) => {
       if (scale.value <= 1) return;
+      auto.set(false);
       const st = start.value;
       follow(scale.value, st.x + e.translationX, st.y + e.translationY);
     })
@@ -221,6 +237,7 @@ export function useZoom(
     .enabled(enabled)
     .numberOfTaps(2)
     .onEnd((e) => {
+      auto.set(false);
       if (scale.value > 1.01) {
         animateTo(1, 0, 0);
         return;
@@ -245,6 +262,7 @@ export function useZoom(
       // notch is capped so it never jumps.
       const fx = gx - ox;
       const fy = gy - oy;
+      auto.set(false);
       const now = Date.now();
       const w = wheel.current;
       if (now - w.at > 250) {
@@ -263,7 +281,27 @@ export function useZoom(
       x.set(withTiming(w.x, config));
       y.set(withTiming(w.y, config));
     },
-    panBy: (dx, dy) => apply(scale.get(), x.get() + dx, y.get() + dy),
-    reset: () => animateTo(1, 0, 0),
+    panBy: (dx, dy) => {
+      auto.set(false);
+      apply(scale.get(), x.get() + dx, y.get() + dy);
+    },
+    reset: () => {
+      auto.set(false);
+      animateTo(1, 0, 0);
+    },
+    rearm: () => {
+      if (scale.get() <= 1.01) auto.set(true);
+    },
+    focusOn: (target) => {
+      if (!auto.get()) return;
+      if (!target) {
+        if (scale.get() > 1.01) animateTo(1, 0, 0);
+        return;
+      }
+      const s = Math.min(MAX_FOCUS_ZOOM, Math.max(1, Math.min(width / target.width, height / target.height)));
+      const cx = target.x + target.width / 2;
+      const cy = target.y + target.height / 2;
+      animateTo(s, width / 2 - cx * s, height / 2 - cy * s);
+    },
   };
 }

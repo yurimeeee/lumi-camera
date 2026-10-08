@@ -21,7 +21,7 @@ export type AdjustmentKey =
   | 'vignette'
   | 'grain';
 
-export type RetouchKey = 'skin' | 'smooth' | 'tone' | 'glow' | 'detail';
+export type RetouchKey = 'skin' | 'smooth' | 'texture' | 'tone' | 'glow' | 'detail';
 
 /** Every scalar the processing pipeline understands. */
 export type ToneKey = AdjustmentKey | RetouchKey;
@@ -113,7 +113,21 @@ export interface EditState {
    * engine turns them into face-relative deformations.
    */
   faces: Readonly<Record<string, FaceRetouch>>;
+  /**
+   * Where each edited face was when it was first edited (source-normalised).
+   * Re-detection (another detector version, a restored project) matches
+   * faces to these, so edits stay on the same person.
+   */
+  faceAnchors: Readonly<Record<string, FaceAnchor>>;
   dateStamp: boolean;
+}
+
+/** A face's position for re-identification: centre and size, normalised against the source image. */
+export interface FaceAnchor {
+  x: number;
+  y: number;
+  /** Larger side of the face box (share of the image's larger side). */
+  size: number;
 }
 
 /** Face retouch controls. Ranges live in constants/faceRetouch.ts (0…100 or -100…100). */
@@ -132,7 +146,10 @@ export type FaceRetouchKey =
   | 'eyeHeight'
   | 'eyeDistance'
   | 'eyePosition'
+  | 'eyeAngle'
   | 'outerCorner'
+  | 'underEye'
+  | EyeSideKey
   // Nose
   | 'noseSlim'
   | 'noseWidth'
@@ -140,6 +157,7 @@ export type FaceRetouchKey =
   | 'noseSize'
   | 'noseLength'
   | 'noseWing'
+  | 'nostril'
   // Lips
   | 'lipSize'
   | 'lipWidth'
@@ -147,12 +165,29 @@ export type FaceRetouchKey =
   | 'lowerLip'
   | 'mouthPosition'
   | 'smile'
+  | 'mouthCorner'
+  | 'philtrum'
   // Proportion
   | 'midface'
   | 'faceLength'
   | 'upperFace'
   | 'lowerFace'
-  | 'nosePosition';
+  | 'nosePosition'
+  // Skin (needs the face's regions: under-eye, eyes, mouth, creases)
+  | 'darkCircle'
+  | 'wrinkle'
+  | 'redness'
+  | 'teeth'
+  | 'eyeBright';
+
+/** Eye controls that can also be set per eye (added to the both-eyes value). */
+export type EyeShapeKey = 'eyeSize' | 'eyeWidth' | 'eyeHeight' | 'eyePosition' | 'eyeAngle' | 'outerCorner';
+/**
+ * Per-eye offsets. L / R are the detector's left / right eye (image-left /
+ * image-right in the *source* photo), so they stay on the same eye when the
+ * photo is flipped later.
+ */
+export type EyeSideKey = `${EyeShapeKey}${'L' | 'R'}`;
 
 export type FaceRetouch = Record<FaceRetouchKey, number>;
 

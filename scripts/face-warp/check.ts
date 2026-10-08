@@ -19,6 +19,7 @@ import { join } from 'path';
 
 import { DEFAULT_FACE_RETOUCH, FACE_RETOUCH_KEYS } from '@/constants/faceRetouch';
 import { getFilter } from '@/constants/filters';
+import { mid } from '@/services/faceDetection/landmarkMath';
 import type { DetectedFace } from '@/services/faceDetection/types';
 import { mapVisionFace } from '@/services/faceDetection/visionMapping';
 import {
@@ -30,9 +31,10 @@ import {
   type FaceWarpPlan,
 } from '@/services/faceWarp/FaceWarpEngine';
 import { buildFaceModel } from '@/services/faceWarp/mesh';
+import { buildFaceRegions, prepareRegionInputs, regionRadius } from '@/services/faceWarp/regions';
 import { buildUniforms, resolveProcessing } from '@/services/imageProcessing';
 import { LUMI_SKSL } from '@/shaders/lumiShader';
-import type { FaceRetouchKey, Geometry } from '@/types/editing';
+import type { FaceRetouch, FaceRetouchKey, Geometry } from '@/types/editing';
 
 // ── Thresholds (slider ±100) ────────────────────────────────────
 const MIN_DET = 0.5; // backward Jacobian determinant: > 0 means no folds
@@ -44,7 +46,7 @@ const ROOT = join(import.meta.dir, '..', '..');
 const HERE = import.meta.dir;
 const CACHE = join(ROOT, '.face-warp-cache');
 const G: Geometry = { rotation: 0, flipH: false, flipV: false, crop: null, aspect: 'original' };
-const PROPORTION_KEYS: FaceRetouchKey[] = ['midface', 'faceLength', 'lowerFace', 'mouthPosition', 'nosePosition', 'eyePosition'];
+const PROPORTION_KEYS: FaceRetouchKey[] = ['midface', 'faceLength', 'lowerFace', 'mouthPosition', 'nosePosition', 'eyePosition', 'philtrum'];
 
 interface Photo {
   id: string;
@@ -217,7 +219,63 @@ for (const p of photos) {
   );
 }
 
-// ── 4. Shader compiles and matches the TS mirror ────────────────
+// ── 4. Skin regions sit on their features (real landmarks) ──────
+const TONE: Partial<FaceRetouch> = { darkCircle: 100, underEye: 100, wrinkle: 100, redness: 100, teeth: 100, eyeBright: 100 };
+let regionCases = 0;
+for (const p of photos) {
+  const img = decode(join(CACHE, `${p.id}.jpg`));
+  const W = img.width();
+  const H = img.height();
+  img.delete();
+  const faces = facesOf(p, W, H);
+  const edits = Object.fromEntries(faces.map((f) => [f.id, { ...DEFAULT_FACE_RETOUCH, ...TONE }]));
+  const all = buildFaceRegions(prepareRegionInputs(faces, edits, G), W, H, true);
+  for (const f of faces) {
+    const lm = f.landmarks;
+    const at = (q: { x: number; y: number }) => ({ x: q.x * W, y: q.y * H });
+    const near = all.filter((q) => Math.hypot(q.c.x - at(lm.nose.tip).x, q.c.y - at(lm.nose.tip).y) < f.bounds.width * W);
+    const tag = `${p.id} ${f.id}`;
+    regionCases++;
+    const inside = (kind: string, q: { x: number; y: number }, limit = 1) => near.some((r) => r.kind === kind && regionRadius(at(q), r) < limit);
+    // Features are protected; skin between them is not.
+    for (const [name, q] of [['left eye', lm.leftEye.center], ['right eye', lm.rightEye.center], ['mouth', lm.lips.center], ['left nostril', lm.nose.leftNostril]] as const) {
+      if (!inside('protect', q, 0.9)) fail(`${tag}: ${name} not protected`);
+    }
+    if (inside('protect', mid(lm.leftCheek, lm.nose.leftWing), 1)) fail(`${tag}: cheek protected (smoothing would skip it)`);
+    // Eye tools: on the eye opening, not the brow.
+    if (!inside('eye', lm.leftEye.center, 0.8) || !inside('eye', lm.rightEye.center, 0.8)) fail(`${tag}: eye region misses the iris`);
+    if (lm.leftEyebrow.some((q) => inside('eye', q))) fail(`${tag}: eye region reaches the brow`);
+    // Dark circle: below each eye, not on it. Where the hollow is gets
+    // checked on faces turned less than ~50° (eye widths within 1.6×); on a
+    // near-profile face the far side's landmarks are too sparse to say.
+    const ew = (e: typeof lm.leftEye) => Math.hypot((e.outer.x - e.inner.x) * W, (e.outer.y - e.inner.y) * H);
+    const ratio = Math.max(ew(lm.leftEye), ew(lm.rightEye)) / Math.max(1e-6, Math.min(ew(lm.leftEye), ew(lm.rightEye)));
+    for (const e of [lm.leftEye, lm.rightEye]) {
+      if (inside('underEye', e.center)) fail(`${tag}: under-eye region covers the eye`);
+      if (ratio > 1.6) continue;
+      // The hollow: a quarter of the way from the lowest lid point down to
+      // the alae, along the face's own vertical (tilted faces).
+      const a = at(lm.leftEye.center);
+      const b = at(lm.rightEye.center);
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      let down = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+      const m = at(lm.lips.center);
+      if ((m.x - a.x) * down.x + (m.y - a.y) * down.y < 0) down = { x: -down.x, y: -down.y };
+      const depth = (q: { x: number; y: number }) => at(q).x * down.x + at(q).y * down.y;
+      const lid = e.lowerLid.reduce((p, q) => (depth(q) > depth(p) ? q : p), e.center);
+      const step = (depth(mid(lm.nose.leftWing, lm.nose.rightWing)) - depth(lid)) * 0.25;
+      const below = { x: (at(lid).x + down.x * step) / W, y: (at(lid).y + down.y * step) / H };
+      if (!inside('underEye', below)) fail(`${tag}: under-eye region misses the hollow`);
+    }
+    // Teeth: inside the lips, never past them.
+    const mouth = near.filter((r) => r.kind === 'mouth');
+    for (const r of mouth) {
+      if (regionRadius(at(lm.nose.base), r) < 1 || regionRadius(at(lm.chin), r) < 1) fail(`${tag}: teeth region leaves the mouth`);
+    }
+  }
+}
+
+// ── 5. Shader compiles and matches the TS mirror ────────────────
 const effect = CK.RuntimeEffect.Make(LUMI_SKSL, (e: string) => fail(`SkSL: ${e}`));
 let mirrorError = -1;
 if (effect) {
@@ -226,7 +284,7 @@ if (effect) {
   const H = img.height();
   img.delete();
   const faces = facesOf(photos[0]!, W, H);
-  const r = { ...DEFAULT_FACE_RETOUCH, slim: 100, jaw: 60, noseWing: 100, eyeWidth: 100, lipWidth: 100, midface: -100 };
+  const r = { ...DEFAULT_FACE_RETOUCH, slim: 100, jaw: 60, noseWing: 100, eyeWidth: 100, eyeAngle: 100, nostril: -60, lipWidth: 100, mouthCorner: 60, midface: -100 };
   const plan = buildFaceWarp(prepareFaceInputs(faces, { 'face-0': r }, G), W, H)!;
   const values = { ...buildUniforms(resolveProcessing({ filter: getFilter('original'), intensity: 0 }), W, H, faceWarpUniforms(plan)), uReshape: 0 } as Record<string, number | number[]>;
   const flat = new Float32Array(effect.getUniformFloatCount());
@@ -279,7 +337,8 @@ if (effect) {
 console.log(rows.join('\n'));
 console.log(
   `\n${cases} cases · minDet ${worst.det.toFixed(2)} (> ${MIN_DET}) · stretch ${(worst.stretch * 100).toFixed(1)}% (≤ ${MAX_STRETCH * 100}%) · ` +
-    `features ${(worst.feature * 100).toFixed(1)}% (≤ ${MAX_FEATURE_DISTORTION * 100}%) · background ${worst.bg.toFixed(1)}px · shader↔TS ${mirrorError}px`,
+    `features ${(worst.feature * 100).toFixed(1)}% (≤ ${MAX_FEATURE_DISTORTION * 100}%) · background ${worst.bg.toFixed(1)}px · shader↔TS ${mirrorError}px · ` +
+    `skin regions on ${regionCases} faces`,
 );
 if (failures.length) {
   console.error(`\n✗ ${failures.length} failure(s):\n  ${failures.slice(0, 30).join('\n  ')}`);

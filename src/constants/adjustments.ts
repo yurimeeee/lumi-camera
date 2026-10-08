@@ -55,6 +55,7 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
 export const DEFAULT_RETOUCH: Retouch = {
   skin: 0,
   smooth: 0,
+  texture: 0,
   tone: 0,
   glow: 0,
   detail: 0,

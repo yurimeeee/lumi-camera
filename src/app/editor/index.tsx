@@ -23,9 +23,12 @@ import { CurvesPanel } from '@/components/editor/CurvesPanel';
 import { HslPanel } from '@/components/editor/HslPanel';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
 import { aspectRatioOf } from '@/constants/crop';
-import { hasFaceEdits } from '@/constants/faceRetouch';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { useFaces } from '@/hooks/useFaces';
+import { anchorOf, assignFaceIds } from '@/services/faceDetection/faceIdentity';
+import { focusRect, type FocusTarget } from '@/services/faceDetection/featureFocus';
+import { needsFaces } from '@/services/faceWarp/faceRender';
+import { sourceToFrame } from '@/services/frameCoords';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { useSaveEdit } from '@/hooks/useSaveEdit';
 import { useWorkingImage } from '@/hooks/useWorkingImage';
@@ -56,12 +59,31 @@ export default function EditorScreen() {
   const working = useWorkingImage(source, displayGeometry);
   const thumbImage = usePreviewImage(source?.uri);
   // Detect as soon as the retouch panel opens so the face tools respond right
-  // away (and keep the result while face edits exist, e.g. after undo).
-  const faceInUse = useEditorStore((s) => hasFaceEdits(s.present.faces));
-  const { faces, status: faceStatus } = useFaces(source, faceInUse || tool === 'retouch');
+  // away (and keep the result while face edits or skin smoothing need it,
+  // e.g. after undo or a restore).
+  const faceInUse = useEditorStore((s) => needsFaces(s.present));
+  const { faces: detected, status: faceStatus } = useFaces(source, faceInUse || tool === 'retouch');
+  // Ids follow the faces the edit was made on (anchors), not detection order.
+  const faceAnchors = useEditorStore((s) => s.present.faceAnchors);
+  const faces = useMemo(
+    () => (source ? assignFaceIds(detected, faceAnchors, source.width, source.height) : detected),
+    [detected, faceAnchors, source],
+  );
   const [pickedFaceId, setPickedFaceId] = useState<string | null>(null);
   // The largest face until the user picks another one.
-  const selectedFaceId = faces.find((f) => f.id === pickedFaceId)?.id ?? faces[0]?.id ?? null;
+  const selectedFace = faces.find((f) => f.id === pickedFaceId) ?? faces[0] ?? null;
+  const selectedFaceId = selectedFace?.id ?? null;
+  const selectedAnchor = useMemo(
+    () => (selectedFace && source ? anchorOf(selectedFace, source.width, source.height) : null),
+    [selectedFace, source],
+  );
+  // Which detector eye is on the left of the photo as shown (a flip swaps them).
+  const leftEye: 'L' | 'R' =
+    selectedFace &&
+    sourceToFrame(selectedFace.landmarks.leftEye.center, geometry).x > sourceToFrame(selectedFace.landmarks.rightEye.center, geometry).x
+      ? 'R'
+      : 'L';
+  const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null);
   const [debugLandmarks, setDebugLandmarks] = useState(false);
   const typeface = useTypeface(DATE_STAMP_FONT);
   const { save, saving } = useSaveEdit(typeface);
@@ -91,6 +113,11 @@ export default function EditorScreen() {
     }
   }, [canUndo, restored, savedAt, pastLength]);
 
+  const openBlemish = () => {
+    setBrush((b) => ({ ...b, mode: 'spot' }));
+    setTool('reshape');
+  };
+
   const onSave = async () => {
     if (await save()) setSavedAt(useEditorStore.getState().past.length);
   };
@@ -107,6 +134,10 @@ export default function EditorScreen() {
   }
 
   const fitted = working && box.width > 0 ? fitContain(working.width, working.height, box.width, box.height) : null;
+  const focus =
+    tool === 'retouch' && focusTarget && selectedFace && working
+      ? focusRect(selectedFace, focusTarget, displayGeometry, working.width, working.height)
+      : null;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -156,6 +187,8 @@ export default function EditorScreen() {
               debugLandmarks={tool === 'retouch' && debugLandmarks}
               brush={tool === 'reshape' ? brushTool : null}
               zoomEnabled={!cropping}
+              focus={focus}
+              autoFrame={tool === 'retouch'}
             />
             {cropping && fitted ? (
               <View style={[styles.cropLayer, { width: fitted.width, height: fitted.height, left: (box.width - fitted.width) / 2, top: (box.height - fitted.height) / 2 }]}>
@@ -197,8 +230,12 @@ export default function EditorScreen() {
               faceStatus={faceStatus}
               faceCount={faces.length}
               selectedFaceId={selectedFaceId}
+              selectedAnchor={selectedAnchor}
+              leftEye={leftEye}
               debugLandmarks={debugLandmarks}
               onDebugLandmarks={setDebugLandmarks}
+              onFocusChange={setFocusTarget}
+              onOpenBlemish={openBlemish}
             />
           ) : null}
           {tool === 'reshape' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}

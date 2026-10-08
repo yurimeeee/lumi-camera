@@ -8,6 +8,7 @@ import { NO_SPOTS, type SpotUniforms } from './blemish';
 import { buildCurveTable, isIdentityTable } from './color/curves';
 import { composeHsl } from './color/hsl';
 import { NO_FACE_WARP, type FaceWarpUniforms } from './faceWarp/FaceWarpEngine';
+import { NO_REGIONS, type RegionUniforms } from './faceWarp/regions';
 import type { FilterDefinition } from '@/types/filters';
 
 /**
@@ -77,6 +78,7 @@ export function isIdentity(p: ResolvedProcessing): boolean {
  * @param height render target height in canvas units
  * @param faceWarp face retouch warp for this render target (see services/faceWarp)
  * @param spots  잡티 제거 spots for this render target (see spotUniforms)
+ * @param regions face regions for skin tools (see services/faceWarp/regions)
  * @param grainSeed stable seed so grain doesn't "boil" while editing
  */
 export function buildUniforms(
@@ -85,6 +87,7 @@ export function buildUniforms(
   height: number,
   faceWarp: FaceWarpUniforms = NO_FACE_WARP,
   spots: SpotUniforms = NO_SPOTS,
+  regions: RegionUniforms = NO_REGIONS,
   grainSeed = 13.7,
 ): Uniforms {
   const t = p.tone;
@@ -110,11 +113,13 @@ export function buildUniforms(
     uGrainSeed: grainSeed,
     uSkin: Math.max(0, n(t.skin)),
     uSmooth: Math.max(0, n(t.smooth)),
+    uTexture: n(t.texture),
     uTone: n(t.tone),
     uGlow: Math.max(0, n(t.glow)),
     uDetail: Math.max(0, n(t.detail)),
     ...faceWarp,
     ...spots,
+    ...regions,
     uShadowTint: [...p.split.shadows],
     uHighlightTint: [...p.split.highlights],
     uSplit: n(p.split.amount),

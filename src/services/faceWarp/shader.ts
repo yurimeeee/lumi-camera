@@ -26,7 +26,7 @@ uniform float uPrimCount;
 uniform float4 uPrimA[${MAX_PRIMS}];
 // axis.xy, ryDown, core
 uniform float4 uPrimB[${MAX_PRIMS}];
-// kind (0 move, 1 scale), move.xy or (kx, ky)
+// kind (0 move, 1 scale, 2 rotate), move.xy, (kx, ky) or (angle, 0)
 uniform float4 uPrimC[${MAX_PRIMS}];
 
 float bsp(float x) {
@@ -74,7 +74,7 @@ float2 faceField(float2 p) {
   return p;
 }
 
-// Feature primitives: elliptical, flat core + smoothstep rim; move or scale.
+// Feature primitives: elliptical, flat core + smoothstep rim; move, scale or rotate.
 float2 featureWarp(float2 p) {
   for (int i = 0; i < ${MAX_PRIMS}; i++) {
     if (float(i) >= uPrimCount) break;
@@ -92,8 +92,13 @@ float2 featureWarp(float2 p) {
     float w = 1.0 - smoothstep(B.w, 1.0, r);
     if (C.x < 0.5) {
       p -= C.yz * w;
-    } else {
+    } else if (C.x < 1.5) {
       p = A.xy + ax * (a * (1.0 - C.y * w)) + ay * (b * (1.0 - C.z * w));
+    } else {
+      float th = -C.y * w;
+      float cs = cos(th);
+      float sn = sin(th);
+      p = A.xy + float2(d.x * cs - d.y * sn, d.x * sn + d.y * cs);
     }
   }
   return p;

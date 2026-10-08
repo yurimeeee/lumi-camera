@@ -68,6 +68,8 @@ export interface FaceModel {
     base: Vec;
     leftWing: Vec;
     rightWing: Vec;
+    leftNostril: Vec;
+    rightNostril: Vec;
     /** Half the wing-to-wing width. */
     halfWidth: number;
     /** Nasion → base along `down`. */
@@ -232,7 +234,17 @@ export function buildFaceModel(lm: FaceLandmarks, width: number, height: number)
     reach,
     eyes,
     brows: [pxs(lm.leftEyebrow), pxs(lm.rightEyebrow)],
-    nose: { nasion, tip, base, leftWing, rightWing, halfWidth: noseHalf, length: noseLength },
+    nose: {
+      nasion,
+      tip,
+      base,
+      leftWing,
+      rightWing,
+      leftNostril: px(lm.nose.leftNostril),
+      rightNostril: px(lm.nose.rightNostril),
+      halfWidth: noseHalf,
+      length: noseLength,
+    },
     lips: {
       center: lipCenter,
       leftCorner: lc,

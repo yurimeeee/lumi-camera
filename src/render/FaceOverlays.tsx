@@ -3,6 +3,7 @@ import { memo, useMemo } from 'react';
 
 import type { DetectedFace, Point } from '@/services/faceDetection/types';
 import { warpForward, type FaceWarpPlan } from '@/services/faceWarp/FaceWarpEngine';
+import type { Region, RegionKind } from '@/services/faceWarp/regions';
 import { sourceToFrame } from '@/services/frameCoords';
 import type { Geometry } from '@/types/editing';
 
@@ -123,6 +124,44 @@ export const LandmarkDebugLayer = memo(function LandmarkDebugLayer({
     <>
       {groups.map((g) => (
         <Points key={g.key} points={g.points} mode="points" color={g.color} strokeWidth={g.size} strokeCap="round" />
+      ))}
+    </>
+  );
+});
+
+const REGION_COLORS: Record<RegionKind, string> = {
+  protect: 'rgba(255,255,255,0.7)',
+  eye: '#6ED3F5',
+  underEye: '#F5D76E',
+  aegyo: '#F5A66E',
+  mouth: '#E07AF5',
+  crease: '#8BE07A',
+  face: '#F57A8B',
+};
+
+/**
+ * Dev-only outlines of the skin regions (services/faceWarp/regions): where
+ * each skin tool may act and which features are protected. Drawn on the
+ * unwarped photo coordinates, like the shader evaluates them.
+ */
+export const RegionDebugLayer = memo(function RegionDebugLayer({ regions }: { regions: readonly Region[] }) {
+  const paths = useMemo(
+    () =>
+      regions.map((r, i) => {
+        const path = Skia.Path.Make();
+        path.addOval(Skia.XYWHRect(-r.rx, -r.ry, r.rx * 2, r.ry * 2));
+        const m = Skia.Matrix();
+        m.translate(r.c.x, r.c.y);
+        m.rotate(Math.atan2(r.axis.y, r.axis.x));
+        path.transform(m);
+        return { key: `${r.kind}-${i}`, path, color: REGION_COLORS[r.kind] };
+      }),
+    [regions],
+  );
+  return (
+    <>
+      {paths.map((p) => (
+        <Path key={p.key} path={p.path} style="stroke" strokeWidth={1} color={p.color} />
       ))}
     </>
   );

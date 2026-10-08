@@ -19,17 +19,17 @@ import { useReshapeField } from '@/hooks/useReshapeField';
 import type { WorkingImage } from '@/hooks/useWorkingImage';
 import { useZoom } from '@/hooks/useZoom';
 import { DateStampLayer } from '@/render/DateStampLayer';
-import { FaceGuides, LandmarkDebugLayer } from '@/render/FaceOverlays';
+import { FaceGuides, LandmarkDebugLayer, RegionDebugLayer } from '@/render/FaceOverlays';
 import { LumiLayer } from '@/render/LumiLayer';
 import type { DetectedFace } from '@/services/faceDetection/types';
-import { buildFaceWarp, faceWarpUniforms, prepareFaceInputs } from '@/services/faceWarp/FaceWarpEngine';
+import { faceRender } from '@/services/faceWarp/faceRender';
 import { buildUniforms, isIdentity, resolveProcessing } from '@/services/imageProcessing';
 import { frameSize, frameToSource, sourceToFrame } from '@/services/reshape';
 import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { MAX_SPOTS, spotUniforms } from '@/services/blemish';
 import { showToast } from '@/stores/toastStore';
-import type { Geometry, SourceImage } from '@/types/editing';
+import type { Geometry, NormalizedRect, SourceImage } from '@/types/editing';
 import { formatDateStamp } from '@/utils/dateStamp';
 
 interface Props {
@@ -55,6 +55,14 @@ interface Props {
   brush: Brush | null;
   /** Pinch / wheel zoom (off while cropping, where the overlay maps the unzoomed frame). */
   zoomEnabled: boolean;
+  /**
+   * Area to frame automatically (frame-normalised), e.g. the nose while a nose
+   * tool is selected; null for the whole photo. Ignored once the user has
+   * zoomed by hand, until they return to fit.
+   */
+  focus: NormalizedRect | null;
+  /** A tool that frames features is open; entering it re-arms framing (unless the user is zoomed in). */
+  autoFrame: boolean;
 }
 
 export interface Brush {
@@ -97,6 +105,8 @@ export const EditorCanvas = memo(function EditorCanvas({
   debugLandmarks,
   brush,
   zoomEnabled,
+  focus,
+  autoFrame,
 }: Props) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
@@ -132,21 +142,40 @@ export const EditorCanvas = memo(function EditorCanvas({
   ]);
   const photoClip = useMemo(() => rrect(rect(0, 0, width, height), radius.sm, radius.sm), [width, height]);
 
-  // Face warp in canvas pixels; rebuilt from the original landmarks on every
-  // change (cheap: a few dozen points), evaluated per pixel by the shader.
-  const facePlan = useMemo(
-    () => buildFaceWarp(prepareFaceInputs(faces, faceEdits, geometry), width, height),
-    [faces, faceEdits, geometry, width, height],
+  // Automatic framing follows the selected tool (a value key, so a new object
+  // with the same rect doesn't move the view).
+  const focusKey = focus ? [focus.x, focus.y, focus.width, focus.height].map((v) => v.toFixed(3)).join(',') : '';
+  const { focusOn, rearm } = zoom;
+  useEffect(() => {
+    if (autoFrame) rearm();
+    // Only on entering / leaving the tool.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFrame]);
+  useEffect(() => {
+    if (!zoomEnabled) return;
+    const f = focusKey ? focusKey.split(',').map(Number) : null;
+    focusOn(f ? { x: f[0]! * width, y: f[1]! * height, width: f[2]! * width, height: f[3]! * height } : null);
+    // focusOn is recreated every render; the view only moves when the target changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, width, height, zoomEnabled]);
+
+  // Face warp + skin regions in canvas pixels; rebuilt from the original
+  // landmarks on every change (cheap: a few dozen points), evaluated per
+  // pixel by the shader.
+  const face = useMemo(
+    () => faceRender(faces, { faces: faceEdits, retouch }, geometry, width, height),
+    [faces, faceEdits, retouch, geometry, width, height],
   );
+  const facePlan = face.plan;
 
   const processing = useMemo(
     () => resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch, hsl, curves }),
     [filterId, intensity, adjustments, retouch, hsl, curves],
   );
   const uniforms = useMemo(() => {
-    if (isIdentity(processing) && !reshape && spots.length === 0 && !facePlan) return null;
-    return buildUniforms(processing, width, height, faceWarpUniforms(facePlan), spotUniforms(spots, geometry, source, width, height));
-  }, [processing, width, height, facePlan, reshape, spots, geometry, source]);
+    if (isIdentity(processing) && !reshape && spots.length === 0 && !face.active) return null;
+    return buildUniforms(processing, width, height, face.warp, spotUniforms(spots, geometry, source, width, height), face.regions);
+  }, [processing, width, height, face, reshape, spots, geometry, source]);
 
   /** Face outlines in canvas pixels (for the selector and taps). */
   const faceOutlines = useMemo(
@@ -346,6 +375,7 @@ export const EditorCanvas = memo(function EditorCanvas({
               {showFaceGuides && !showOriginal ? (
                 <FaceGuides outlines={faceOutlines} selectedId={selectedFaceId} plan={facePlan} />
               ) : null}
+              {__DEV__ && debugLandmarks && !showOriginal ? <RegionDebugLayer regions={face.regionList} /> : null}
               {__DEV__ && debugLandmarks ? (
                 <LandmarkDebugLayer
                   faces={faces}

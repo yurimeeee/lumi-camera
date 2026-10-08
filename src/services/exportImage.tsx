@@ -12,10 +12,9 @@ import { formatDateStamp } from '@/utils/dateStamp';
 
 import { withExif } from './exif';
 import { encodeExport } from './exportEncoding';
-import { hasFaceEdits } from '@/constants/faceRetouch';
-
 import { detectFaces } from './faceDetection/FaceDetector';
-import { buildFaceWarp, faceWarpUniforms, prepareFaceInputs } from './faceWarp/FaceWarpEngine';
+import { assignFaceIds } from './faceDetection/faceIdentity';
+import { faceRender, needsFaces } from './faceWarp/faceRender';
 import { applyGeometry, EXPORT_MAX_SIDE_HQ, EXPORT_MAX_SIDE_STD, type ImageFile } from './imagePipeline';
 import { buildUniforms, isIdentity, resolveProcessing } from './imageProcessing';
 import { spotUniforms } from './blemish';
@@ -78,22 +77,25 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
     curves: edit.curves,
   });
   // Face retouch: the same source landmarks the preview used (cached per
-  // image), mapped through this export's geometry and evaluated at full
-  // resolution — never a screenshot of the preview.
-  const faces = hasFaceEdits(edit.faces) ? await detectFaces(source).catch(() => []) : [];
-  const facePlan = buildFaceWarp(prepareFaceInputs(faces, edit.faces, edit.geometry), width, height);
+  // image, matched to the edit's faces by anchor), mapped through this
+  // export's geometry and evaluated at full resolution — never a screenshot
+  // of the preview.
+  const detected = needsFaces(edit) ? await detectFaces(source).catch(() => []) : [];
+  const faces = assignFaceIds(detected, edit.faceAnchors, source.width, source.height);
+  const face = faceRender(faces, edit, edit.geometry, width, height);
   const reshape = edit.reshape.length
     ? buildReshapeField(edit.reshape, edit.geometry, source.width, source.height).toTextures()
     : null;
   const uniforms =
-    isIdentity(processing) && !reshape && edit.spots.length === 0 && !facePlan
+    isIdentity(processing) && !reshape && edit.spots.length === 0 && !face.active
       ? null
       : buildUniforms(
           processing,
           width,
           height,
-          faceWarpUniforms(facePlan),
+          face.warp,
           spotUniforms(edit.spots, edit.geometry, source, width, height),
+          face.regions,
         );
   const stamp =
     edit.dateStamp && opts.stampTypeface ? formatDateStamp(source.takenAt, opts.dateFormat) : null;

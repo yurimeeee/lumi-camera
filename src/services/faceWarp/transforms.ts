@@ -1,3 +1,4 @@
+import { eyeValue } from '@/constants/faceRetouch';
 import type { FaceRetouch } from '@/types/editing';
 
 import * as LIM from './limits';
@@ -15,9 +16,10 @@ import { add, dot, levelT, PROFILE_LEVELS, lerp, len, scale, sub, unit, type Fac
  *     vertical axis. Only the skin between features is stretched or
  *     compressed; eyes, nose and mouth sit in flat parts and move rigidly.
  *  3. Feature primitives: an ellipse around a feature with a flat core and a
- *     smooth rim, that either moves its content (`move`) or scales it about
- *     its centre (`scale`, per axis). The core moves/scales as a whole, so the
- *     feature keeps its shape; only the rim (skin) absorbs the change.
+ *     smooth rim, that moves its content (`move`), scales it about its centre
+ *     (`scale`, per axis) or turns it about its centre (`rotate`). The core
+ *     moves/scales/turns as a whole, so the feature keeps its shape; only the
+ *     rim (skin) absorbs the change.
  */
 
 /** Displacement step along the face's vertical axis (face units, + = content moves up). */
@@ -28,7 +30,7 @@ export interface Band {
 }
 
 export interface Prim {
-  kind: 'move' | 'scale';
+  kind: 'move' | 'scale' | 'rotate';
   /** Centre in px — for `move`, where the feature ends up. */
   c: Vec;
   /** Local x axis (unit); local y = (-axis.y, axis.x) points toward the chin. */
@@ -44,6 +46,8 @@ export interface Prim {
   /** `scale`: k per local axis (core grows by 1 / (1 − k)). */
   kx?: number;
   ky?: number;
+  /** `rotate`: angle in radians, positive = clockwise on screen (y down). */
+  angle?: number;
 }
 
 export interface FaceDeformation {
@@ -110,6 +114,17 @@ function rimSafeK(k: number, core: number, aspect: number): number {
     max = Math.min(max, k * g > 0 ? (1 - sMin) / Math.abs(g) : (sMax - 1) / Math.abs(g));
   }
   return clamp(k, -max, max);
+}
+
+/**
+ * Largest angle a rotation primitive can use: the rim shears by
+ * |θ| · r · |w′(r)|, worst at the rim's middle, more on an elongated ellipse.
+ */
+function clampAngle(angle: number, core: number, aspect: number): number {
+  const r = core + (1 - core) / 2;
+  const slope = 1.5 / (1 - core);
+  const max = LIM.MAX_ROTATE_SHEAR / (r * slope * Math.max(1, aspect));
+  return clamp(angle, -max, max);
 }
 
 /** Scale primitive with k limited per axis for its shape. */
@@ -185,6 +200,13 @@ export function buildDeformation(m: FaceModel, r: FaceRetouch): FaceDeformation 
   amt.philtrum -= lowerFace * 0.4;
   amt.chin -= lowerFace * 0.6;
   amt.chin -= ease(r.chin) * LIM.MAX_CHIN_SHIFT;
+  // Philtrum: the mouth moves with the philtrum's length; the skin between
+  // the lower lip and the chin takes it back, so the chin stays put. Limited
+  // to what both bands can take smoothly, so the two always cancel.
+  const philtrumCap = (LIM.MAX_BAND_STRETCH * Math.min(B.philtrum.t1 - B.philtrum.t0, B.chin.t1 - B.chin.t0)) / 1.5;
+  const philtrum = clamp(ease(r.philtrum) * LIM.MAX_PHILTRUM_SHIFT, -philtrumCap, philtrumCap);
+  amt.philtrum -= philtrum;
+  amt.chin += philtrum;
   // V-line lifts the chin a little, so the narrower jaw doesn't read as longer.
   amt.chin += ease(r.vLine) * LIM.MAX_VLINE_CHIN_LIFT;
 
@@ -201,32 +223,45 @@ export function buildDeformation(m: FaceModel, r: FaceRetouch): FaceDeformation 
     if (v) lower.push({ ...b, amount: v });
   }
   const total = lower.reduce((sum, b) => sum + b.amount, 0);
-  if (total) {
-    const k = Math.min(1, cap(B.neck) / Math.abs(total));
-    for (const b of lower) bands.push({ ...b, amount: b.amount * k });
-    bands.push({ ...B.neck, amount: -total * k });
-  }
+  // Bands that cancel among themselves (philtrum vs. chin) need no neck band.
+  const k = total ? Math.min(1, cap(B.neck) / Math.abs(total)) : 1;
+  for (const b of lower) bands.push({ ...b, amount: b.amount * k });
+  if (Math.abs(total) > 1e-9) bands.push({ ...B.neck, amount: -total * k });
 
   // ── 3. Features ────────────────────────────────────────────
   const L = m.L;
 
-  // Eyes
+  // Eyes (eyes[0] is the detector's left eye: per-eye offsets use 'L')
   m.eyes.forEach((eye, i) => {
     const side = i === 0 ? -1 : 1;
+    const which = i === 0 ? 'L' : 'R';
+    const v = (key: Parameters<typeof eyeValue>[1]) => ease(eyeValue(r, key, which));
     const ew = eye.width;
     const axis = orient(unit(sub(eye.outer, eye.inner)), m.down);
-    const kSize = ease(r.eyeSize) * LIM.MAX_EYE_SCALE;
-    const kx = clampK(kSize + ease(r.eyeWidth) * LIM.MAX_EYE_WIDTH_SCALE);
-    const ky = clampK(kSize + ease(r.eyeHeight) * LIM.MAX_EYE_HEIGHT_SCALE);
+    const kSize = v('eyeSize') * LIM.MAX_EYE_SCALE;
+    const kx = clampK(kSize + v('eyeWidth') * LIM.MAX_EYE_WIDTH_SCALE);
+    const ky = clampK(kSize + v('eyeHeight') * LIM.MAX_EYE_HEIGHT_SCALE);
     // Moves first (outermost), then the scale about the original centre.
     const mv = add(
       scale(m.across, side * ease(r.eyeDistance) * LIM.MAX_EYE_DISTANCE_SHIFT * ew),
-      scale(up, ease(r.eyePosition) * LIM.MAX_EYE_POSITION_SHIFT * L),
+      scale(up, v('eyePosition') * LIM.MAX_EYE_POSITION_SHIFT * L),
     );
     if (mv.x || mv.y) {
       const core = 0.5;
       const ry = 0.9 * ew;
       prims.push({ kind: 'move', c: eye.center, axis, rx: 1.05 * ew, ryUp: ry, ryDown: ry, core, move: clampMove(mv, core, ry) });
+    }
+    const tilt = v('eyeAngle') * LIM.MAX_EYE_ANGLE;
+    if (tilt) {
+      // Turn the whole eye (lids, lashes, iris) about its centre so the outer
+      // corner rises for +; the iris stays round. The sign depends on which
+      // side the outer corner is on.
+      const out = sub(eye.outer, eye.center);
+      const lift = dot({ x: -out.y, y: out.x }, up) > 0 ? 1 : -1;
+      const core = 0.45;
+      const rx = 1.0 * ew;
+      const ry = 0.78 * ew;
+      prims.push({ kind: 'rotate', c: eye.center, axis, rx, ryUp: ry, ryDown: ry, core, angle: clampAngle(lift * tilt, core, rx / ry) });
     }
     if (kx || ky) {
       // Ellipse follows the eye opening: wide along the lid line, as tall as
@@ -234,7 +269,7 @@ export function buildDeformation(m: FaceModel, r: FaceRetouch): FaceDeformation 
       const ry = clamp(2.1 * eye.height, 0.5 * ew, 0.72 * ew);
       prims.push({ kind: 'scale', c: eye.center, axis, rx: 0.92 * ew, ryUp: ry, ryDown: ry, core: 0.42, kx, ky });
     }
-    const corner = ease(r.outerCorner) * LIM.MAX_OUTER_CORNER_SHIFT * ew;
+    const corner = v('outerCorner') * LIM.MAX_OUTER_CORNER_SHIFT * ew;
     if (corner) {
       const core = 0.12;
       const rr = 0.5 * ew;
@@ -298,6 +333,14 @@ export function buildDeformation(m: FaceModel, r: FaceRetouch): FaceDeformation 
     const ryDown = baseBelowWings + 1.0 * philtrumGap + 0.25 * nw;
     prims.push(scalePrim({ c, axis: faceAxis, rx: 2.2 * nw, ryUp: 1.3 * nw, ryDown, core: 0.45 }, kWing, 0));
   }
+  const kNostril = clampK(ease(r.nostril) * LIM.MAX_NOSTRIL_SCALE);
+  if (kNostril) {
+    // Nostrils only: a flatter ellipse than the wings', centred between the
+    // nostrils, so the tip above and the alae's outer edge barely move.
+    const c = lerp(n.leftNostril, n.rightNostril, 0.5);
+    const ryDown = Math.max(0.25 * nw, dot(sub(n.base, c), m.down)) + 0.8 * philtrumGap;
+    prims.push(scalePrim({ c, axis: faceAxis, rx: 1.45 * nw, ryUp: 0.7 * nw, ryDown, core: 0.35 }, kNostril, 0));
+  }
   const kTip = clampK(ease(r.noseTip) * LIM.MAX_NOSE_TIP_SCALE);
   if (kTip) {
     const rr = 0.72 * nw;
@@ -340,6 +383,16 @@ export function buildDeformation(m: FaceModel, r: FaceRetouch): FaceDeformation 
       const rr = 0.55 * mw;
       const mv = add(scale(up, 0.9 * smile), scale(out, 0.3 * smile));
       prims.push({ kind: 'move', c: corner, axis: faceAxis, rx: rr, ryUp: 0.9 * rr, ryDown: 0.9 * rr, core, move: clampMove(mv, core, 0.9 * rr) });
+    }
+  }
+
+  const cornerLift = ease(r.mouthCorner) * LIM.MAX_MOUTH_CORNER_SHIFT * mw;
+  if (cornerLift) {
+    // Corners only, straight up / down: the centre of the lips stays put.
+    for (const corner of [lp.leftCorner, lp.rightCorner]) {
+      const core = 0.1;
+      const rr = 0.5 * mw;
+      prims.push({ kind: 'move', c: corner, axis: faceAxis, rx: rr, ryUp: 0.9 * rr, ryDown: 0.9 * rr, core, move: clampMove(scale(up, cornerLift), core, 0.9 * rr) });
     }
   }
 

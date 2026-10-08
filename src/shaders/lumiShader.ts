@@ -2,6 +2,7 @@ import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
 
 import { MAX_SPOTS } from '@/services/blemish';
 import { HSL_CENTERS, HSL_MAX_HUE_SHIFT } from '@/services/color/hsl';
+import { REGION_SKSL } from '@/services/faceWarp/regions';
 import { FACE_WARP_SKSL } from '@/services/faceWarp/shader';
 import { RESHAPE_RANGE } from '@/services/reshape';
 
@@ -9,7 +10,9 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * Lumi's single-pass image pipeline, written in SkSL.
  *
  * Order of operations:
- *   face warp → retouch (skin-tone masked) → local detail → exposure/brightness →
+ *   face warp → retouch (skin-tone masked, face features protected) →
+ *   face region tools (dark circle, wrinkle, redness, teeth, eyes) →
+ *   local detail → exposure/brightness →
  *   white balance → highlights/shadows → contrast → saturation/vibrance →
  *   HSL (per colour) → split tone → tone curves (LUT) → glow → fade →
  *   vignette → grain
@@ -17,9 +20,12 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * All radii are expressed in "uPixel" units (1/1000 of the image's short side)
  * so the on-screen preview and the full-resolution export look the same.
  *
- * Retouch note: skin areas are detected with a YCbCr colour-range mask, not
- * semantic face segmentation. Smoothing is an edge-preserving (bilateral)
- * average restricted to that mask, so edges, eyes and hair are kept sharp.
+ * Retouch note: skin is a YCbCr colour-range mask; when faces are known it is
+ * cut by landmark regions (eyes, brows, lips, nostrils — services/faceWarp/
+ * regions.ts), so those stay crisp even where their colour reads as skin.
+ * Smoothing is an edge-preserving (bilateral) average restricted to that
+ * mask. Tools that need a specific area (under-eye, teeth, eyes, creases)
+ * only act inside their landmark region, never on the whole face.
  *
  * Face warp: with face landmarks, the sampling position is displaced before
  * anything else reads the image (services/faceWarp: contour + proportion
@@ -140,6 +146,7 @@ uniform float uGrainSeed;
 
 uniform float uSkin;
 uniform float uSmooth;
+uniform float uTexture;
 uniform float uTone;
 uniform float uGlow;
 uniform float uDetail;
@@ -204,6 +211,7 @@ float3 ringBlur(float2 xy, float radius) {
 
 ${HSL_SKSL}
 ${FACE_WARP_SKSL}
+${REGION_SKSL}
 float decode16(half4 c) {
   return (float(c.r) * 65280.0 + float(c.g) * 255.0) / 65535.0;
 }
@@ -302,9 +310,10 @@ half4 main(float2 pos) {
   float px = uPixel;
 
   // ── Retouch ────────────────────────────────────────────────
+  float protect = uRegionCount > 0.0 ? regionProtect(xy) : 0.0;
   float skin = 0.0;
-  if (uSkin > 0.0 || uSmooth > 0.0 || uTone != 0.0 || uDetail > 0.0) {
-    skin = skinMask(src);
+  if (uSkin > 0.0 || uSmooth > 0.0 || uTexture != 0.0 || uTone != 0.0 || uDetail > 0.0) {
+    skin = skinMask(src) * (1.0 - protect);
   }
   if (skin > 0.001) {
     if (uSkin > 0.0) {
@@ -322,11 +331,15 @@ half4 main(float2 pos) {
     }
   }
 
+  if (uRegionCount > 0.0) c = regionTone(xy, c, src, protect);
+
   // ── Local detail ───────────────────────────────────────────
-  if (uSharpness > 0.0 || uDetail > 0.0) {
+  if (uSharpness > 0.0 || uDetail > 0.0 || uTexture != 0.0) {
     float3 hi = src - ringBlur(xy, 1.2 * px);
     c += hi * uSharpness * 1.6;
     c += hi * uDetail * 1.4 * (1.0 - skin);
+    // 피부결: + brings pores back over smoothing, − softens fine texture.
+    c += hi * uTexture * (uTexture > 0.0 ? 1.1 : 0.9) * skin;
   }
   float3 broadBlur = c;
   if (uDefinition != 0.0 || uGlow > 0.0) {
