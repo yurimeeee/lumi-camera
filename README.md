@@ -75,11 +75,12 @@ npx expo start       # Development Build(또는 Expo Go)로 열기
 
 | 명령 | 설명 |
 | --- | --- |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `tsc --noEmit` (앱 + `scripts/face-warp`) |
 | `npm run lint` | `expo lint` |
 | `npx expo-doctor` | 의존성·설정 진단 |
 | `npm run web` | 웹에서 UI 확인 (얼굴 보정 포함, MediaPipe) |
 | `npm run ios` | `expo run:ios` — 로컬 Development Build (Xcode 16.1 이상) |
+| `npm run check:face-warp` | 얼굴 워프 회귀 검사 (macOS + [Bun], 아래 [검증 결과](#검증-결과) 참고) |
 
 ### iPhone: 얼굴 보정은 Development Build가 필요합니다
 
@@ -288,6 +289,8 @@ Retouch의 얼굴 카테고리 하단 🐞 버튼(`__DEV__`에서만 렌더링)�
 
 macOS에서 같은 Swift 검출 코드(Apple Vision)로 테스트 사진의 랜드마크를 뽑고, CanvasKit(Skia)으로 **실제 Lumi SkSL 셰이더**를 렌더링해 확인했습니다. 웹은 실제 앱을 헤드리스 Chromium으로 조작(E2E)했습니다.
 
+수치 검사는 `npm run check:face-warp`로 다시 돌릴 수 있습니다(`scripts/face-warp/`, 약 40초). 테스트 사진(`photos.json`, Wikimedia Commons의 CC0/CC BY 사진)을 `.face-warp-cache/`에 받고(커밋하지 않음), 앱의 `FaceLandmarkDetector.swift`를 그대로 CLI로 빌드해 랜드마크를 뽑은 뒤, 모든 얼굴 × 컨트롤 × ±100에서 접힘·피부 늘어남·배경 이동·이목구비 왜곡·슬라이더 0 항등을 확인하고, Lumi 셰이더를 CanvasKit으로 컴파일해 셰이더와 TS 미러의 샘플 위치가 일치하는지 봅니다. 기준을 넘으면 실패(exit 1)합니다. `limits.ts`나 `transforms.ts`를 바꾼 뒤 돌려 보세요. macOS의 `swiftc`와 Bun이 필요합니다.
+
 | 사진 | 검출 | Slim · Jaw · Nose Wing · Eye Width · Lip Width · Midface |
 | --- | --- | --- |
 | 정면 (히잡) | ✓ | 자연스러움, 배경 이동 0px |
@@ -347,3 +350,5 @@ macOS에서 같은 Swift 검출 코드(Apple Vision)로 테스트 사진의 랜�
 ## 라이선스 고지
 
 `assets/fonts/DSEG7Classic-Bold.ttf`: DSEG © keshikan, SIL Open Font License 1.1 (`assets/fonts/DSEG-LICENSE.txt`).
+
+[Bun]: https://bun.sh

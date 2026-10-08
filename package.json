@@ -7,7 +7,7 @@
     "@mediapipe/tasks-vision": "^1.0.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/react-native-skia": "2.6.2",
-    "expo": "~57.0.26",
+    "expo": "~57.0.27",
     "expo-camera": "~57.0.6",
     "expo-constants": "~57.0.20",
     "expo-dev-client": "~57.0.19",
@@ -15,12 +15,12 @@
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-image": "~57.0.5",
-    "expo-image-manipulator": "~57.0.20",
+    "expo-image-manipulator": "~57.0.21",
     "expo-image-picker": "~57.0.20",
-    "expo-linking": "~57.0.11",
+    "expo-linking": "~57.0.12",
     "expo-location": "~57.0.20",
     "expo-media-library": "~57.0.5",
-    "expo-router": "~57.0.24",
+    "expo-router": "~57.0.25",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
@@ -37,6 +37,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.2",
     "@types/piexifjs": "^1.0.0",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
@@ -48,10 +49,11 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/face-warp",
     "lint": "expo lint",
     "doctor": "npx expo-doctor",
-    "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js"
+    "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js",
+    "check:face-warp": "bun --preload ./scripts/face-warp/stubs.ts scripts/face-warp/check.ts"
   },
   "private": true
 }

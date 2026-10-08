@@ -1,0 +1,14 @@
+[
+  { "id": "frontal", "note": "정면, 히잡", "license": "CC BY-SA 3.0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/de/Portraits_Libre_Graphics_Meeting_2016_London_%28154546869%29.jpeg/1280px-Portraits_Libre_Graphics_Meeting_2016_London_%28154546869%29.jpeg" },
+  { "id": "three-quarter", "note": "약간 옆 + 머리카락 가림 + 웃음", "license": "CC BY 2.0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7c/Beautiful_Woman_is_Asian_Looking.jpg/1280px-Beautiful_Woman_is_Asian_Looking.jpg" },
+  { "id": "tilted-glasses", "note": "기울어진 얼굴 + 안경", "license": "CC BY 4.0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Peter_Alsop.jpg/1280px-Peter_Alsop.jpg" },
+  { "id": "glasses", "note": "안경", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/bf/Gray-haired_man_portrait_%28Unsplash%29.jpg/1280px-Gray-haired_man_portrait_%28Unsplash%29.jpg" },
+  { "id": "glasses-hair", "note": "안경 + 이마 머리카락", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Man_vanguard_glasses_outdoors_%28Unsplash%29.jpg/1280px-Man_vanguard_glasses_outdoors_%28Unsplash%29.jpg" },
+  { "id": "beard-glasses", "note": "정면 큰 얼굴, 흑백, 수염", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f9/Man_with_a_white_beard_and_glasses%2C_by_Angelina_Litvin%2C_2015-10-05_%28Unsplash%29.jpg/1280px-Man_with_a_white_beard_and_glasses%2C_by_Angelina_Litvin%2C_2015-10-05_%28Unsplash%29.jpg" },
+  { "id": "long-hair", "note": "긴 머리(바람)", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0f/Valerie_Elash_2017-06-02_%28Unsplash%29.jpg/1280px-Valerie_Elash_2017-06-02_%28Unsplash%29.jpg" },
+  { "id": "looking-up", "note": "긴 머리, 위를 봄", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0f/Smiling_woman_in_blanket_%28Unsplash%29.jpg/1280px-Smiling_woman_in_blanket_%28Unsplash%29.jpg" },
+  { "id": "hat", "note": "모자 + 긴 머리", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Dark-haired_woman_by_a_tree_%28Unsplash%29.jpg/1280px-Dark-haired_woman_by_a_tree_%28Unsplash%29.jpg" },
+  { "id": "backlit-side", "note": "역광 측면", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Young_woman_in_leather_jacket_%28Unsplash%29.jpg/1280px-Young_woman_in_leather_jacket_%28Unsplash%29.jpg" },
+  { "id": "group", "note": "3인 단체", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d4/Three_friends_by_train_tracks_%28Unsplash%29.jpg/1280px-Three_friends_by_train_tracks_%28Unsplash%29.jpg" },
+  { "id": "no-face", "note": "고양이 (얼굴 없음)", "license": "CC0", "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/Kari_Shea_2017-04-06_%28Unsplash%29.jpg/1280px-Kari_Shea_2017-04-06_%28Unsplash%29.jpg", "expectFaces": 0 }
+]

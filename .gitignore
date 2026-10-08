@@ -45,3 +45,6 @@ public/canvaskit.wasm
 # MediaPipe face landmarker runtime (copied by postinstall)
 public/mediapipe/
 .gstack/
+
+# Face-warp check: downloaded test photos + Vision CLI
+.face-warp-cache/
