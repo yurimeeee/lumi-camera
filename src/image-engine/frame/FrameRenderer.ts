@@ -12,7 +12,7 @@ import {
 } from '@shopify/react-native-skia';
 
 import { getFilter } from '@/constants/filters';
-import type { ImageTransform, PhotoLayer, SlotLook } from '@/features/frame-studio/types/document';
+import type { FrameStyle, ImageTransform, PhotoLayer, SlotLook } from '@/features/frame-studio/types/document';
 import { lowResOf } from '@/render/lowRes';
 import { curveTexture, identityCurveTexture } from '@/services/color/curveTexture';
 import { buildUniforms, isIdentity, resolveProcessing } from '@/services/imageProcessing';
@@ -175,21 +175,22 @@ function drawRecess(canvas: SkCanvas, g: PrintGeometry, amount: number) {
   canvas.restore();
 }
 
-function drawPaper(canvas: SkCanvas, layer: PhotoLayer, g: PrintGeometry, bank: AssetBank) {
-  const preset = g.preset!;
-  const { frame } = layer;
+/** Paper settings of a kit frame (the studio's FrameStyle, or the editor's frame). */
+export type PaperStyle = Pick<FrameStyle, 'color' | 'texture' | 'textureIntensity' | 'aging' | 'edgeWear'>;
+
+function drawPaper(canvas: SkCanvas, preset: FramePreset, paper: PaperStyle, seed: number, g: FrameGeometry, bank: AssetBank) {
   const effect = getPaperEffect();
-  const tex = frame.texture ? bank.textures.get(frame.texture) : undefined;
-  const texAmt = tex ? frame.textureIntensity / 100 : 0;
+  const tex = paper.texture ? bank.textures.get(paper.texture) : undefined;
+  const texAmt = tex ? paper.textureIntensity / 100 : 0;
   const uniforms = flattenUniforms(effect, {
     uSize: [g.width, g.height],
     uNative: preset.canvas.width,
-    uBase: hexToRgb(frame.color),
+    uBase: hexToRgb(paper.color),
     uTexAmt: texAmt,
     uTexMean: tex?.mean ?? [1, 1, 1],
-    uAging: frame.aging / 100,
-    uWear: frame.edgeWear / 100,
-    uSeed: seedOf(layer.id),
+    uAging: paper.aging / 100,
+    uWear: paper.edgeWear / 100,
+    uSeed: seed,
   });
   // One texture tile = 1024 frame pixels, whatever the print's size (mirrored: the kit tiles aren't seamless).
   const unitsPerPx = g.width / preset.canvas.width;
@@ -200,8 +201,21 @@ function drawPaper(canvas: SkCanvas, layer: PhotoLayer, g: PrintGeometry, bank: 
   paint.setAntiAlias(true);
   paint.setShader(effect.makeShaderWithChildren(uniforms, [child]));
   canvas.save();
-  canvas.clipPath(paperPath(g.width, g.height, g.outerRadius, g.windowBox, g.holeRadius), ClipOp.Intersect, true);
+  canvas.clipPath(paperPath(g.width, g.height, g.outerRadius, g.hole, g.holeRadius), ClipOp.Intersect, true);
   canvas.drawRect(Skia.XYWHRect(0, 0, g.width, g.height), paint);
+  canvas.restore();
+}
+
+/**
+ * A kit frame's paper and its own decorations (perforations, ruling,
+ * captions, tape) — everything but the photo, at g's coordinates.
+ */
+export function drawKitFrame(canvas: SkCanvas, preset: FramePreset, paper: PaperStyle, seed: number, g: FrameGeometry, bank: AssetBank) {
+  drawPaper(canvas, preset, paper, seed, g, bank);
+  // Ruling, perforations and captions belong to the paper: they never run over the photo.
+  canvas.save();
+  canvas.clipPath(paperPath(g.width, g.height, g.outerRadius, g.hole, g.holeRadius), ClipOp.Intersect, true);
+  drawFrameElements(canvas, preset.spec.elements, g, bank);
   canvas.restore();
 }
 
@@ -338,20 +352,12 @@ export function drawPrint(canvas: SkCanvas, layer: PhotoLayer, bank: AssetBank, 
     drawPhoto(canvas, layer, g, bank, opts);
     return;
   }
-  const drawFrame = () => {
-    drawPaper(canvas, layer, g, bank);
-    // Ruling, perforations and captions belong to the paper: they never run over the photo.
-    canvas.save();
-    canvas.clipPath(paperPath(g.width, g.height, g.outerRadius, g.windowBox, g.holeRadius), ClipOp.Intersect, true);
-    drawFrameElements(canvas, g.preset!.spec.elements, g, bank);
-    canvas.restore();
-  };
   for (const part of g.preset.layerOrder) {
     if (part === 'photo') {
       drawPhoto(canvas, layer, g, bank, opts);
       drawRecess(canvas, g, frame.shadow);
     } else {
-      drawFrame();
+      drawKitFrame(canvas, g.preset, frame, seedOf(layer.id), g, bank);
     }
   }
 }

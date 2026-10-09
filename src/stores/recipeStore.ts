@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { DEFAULT_ADJUSTMENTS } from '@/constants/adjustments';
-import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE, NO_FRAME } from '@/constants/film';
+import { completeFilm, completeFrame, DEFAULT_FILM, DEFAULT_STAMP_STYLE, NO_FRAME } from '@/constants/film';
 import { DEFAULT_CURVES, sanitizeCurve, scaleCurve } from '@/services/color/curves';
 import { DEFAULT_HSL, HSL_COLORS } from '@/services/color/hsl';
 import { scaleFilm } from '@/services/film/looks';
@@ -35,7 +35,7 @@ function snapshot(look: Look): Pick<Recipe, 'color' | 'film' | 'frame' | 'stamp'
       curves: { ...DEFAULT_CURVES, ...look.curves },
     },
     film: completeFilm(look.film),
-    frame: { ...NO_FRAME, ...look.frame },
+    frame: completeFrame(look.frame),
     stamp: { show: look.dateStamp, style: { ...DEFAULT_STAMP_STYLE, ...look.stamp } },
   };
 }
@@ -101,7 +101,7 @@ export function migrateRecipe(raw: unknown): Recipe | null {
         curves: { ...DEFAULT_CURVES, ...c.curves },
       },
       film: completeFilm(r.film),
-      frame: { ...NO_FRAME, ...r.frame },
+      frame: completeFrame(r.frame),
       stamp: { show: r.stamp?.show ?? false, style: { ...DEFAULT_STAMP_STYLE, ...r.stamp?.style } },
     };
   }

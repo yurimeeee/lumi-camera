@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { completeFaceRetouch, DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
-import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE, NO_FRAME } from '@/constants/film';
+import { completeFilm, completeFrame, DEFAULT_FILM, DEFAULT_STAMP_STYLE, NO_FRAME } from '@/constants/film';
 import { aspectRatioOf } from '@/constants/crop';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
 import { DEFAULT_CURVES } from '@/services/color/curves';
@@ -72,7 +72,7 @@ export function createEditState(partial?: Partial<EditState>): EditState {
       : null),
     ...(partial?.faceAnchors ? null : { faceAnchors: {} }),
     ...(partial?.film ? { film: completeFilm(partial.film) } : null),
-    ...(partial?.frame ? { frame: { ...NO_FRAME, ...partial.frame } } : null),
+    ...(partial?.frame ? { frame: completeFrame(partial.frame) } : null),
     ...(partial?.stamp ? { stamp: { ...DEFAULT_STAMP_STYLE, ...partial.stamp } } : null),
   } as EditState;
 }
@@ -287,7 +287,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
         ...('film' in look
           ? {
               film: completeFilm(look.film),
-              frame: { ...NO_FRAME, ...look.frame },
+              frame: completeFrame(look.frame),
               dateStamp: look.dateStamp,
               stamp: { ...DEFAULT_STAMP_STYLE, ...look.stamp },
             }

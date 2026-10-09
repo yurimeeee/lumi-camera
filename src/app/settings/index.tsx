@@ -10,7 +10,8 @@ import { SliderControl } from '@/components/common/SliderControl';
 import { OptionSheet } from '@/components/settings/OptionSheet';
 import { SettingRow, SettingSection, SettingToggle } from '@/components/settings/SettingRow';
 import { labelOf, RATIO_OPTIONS, TIMER_OPTIONS } from '@/constants/camera';
-import { DATE_STAMP_COLORS, DATE_STAMP_POSITIONS, FRAME_STYLES } from '@/constants/film';
+import { DATE_STAMP_COLORS, DATE_STAMP_POSITIONS, frameLabel } from '@/constants/film';
+import { framePresets } from '@/image-engine/frame/registry';
 import { FILM_CAMERAS, getFilmCamera } from '@/constants/filmCameras';
 import { FILTERS, getFilter } from '@/constants/filters';
 import { colors, spacing, typography } from '@/constants/theme';
@@ -174,7 +175,7 @@ export default function SettingsScreen() {
           <SettingRow
             icon="crop-outline"
             label="기본 프레임"
-            value={s.defaultFrame === 'camera' ? '카메라 기본' : (FRAME_STYLES.find((f) => f.id === s.defaultFrame)?.label ?? '')}
+            value={s.defaultFrame === 'camera' ? '카메라 기본' : frameLabel(s.defaultFrame)}
             onPress={() => setSheet('filmFrame')}
           />
           <SettingRow
@@ -288,7 +289,8 @@ export default function SettingsScreen() {
         title="기본 프레임"
         options={[
           { value: 'camera' as const, label: '카메라 기본', caption: '카메라마다 정해진 프레임 (Polaroid는 폴라로이드 프레임)' },
-          ...FRAME_STYLES.map((f) => ({ value: f.id, label: f.label })),
+          { value: 'none', label: 'None' },
+          ...framePresets().map((f) => ({ value: f.id, label: f.name })),
         ]}
         value={s.defaultFrame}
         onSelect={(v) => s.set('defaultFrame', v)}

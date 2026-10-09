@@ -76,18 +76,28 @@ export interface FilmEffects {
   drift: number;
 }
 
-export type FrameId = 'none' | 'polaroid' | 'border35' | 'filmStrip' | 'white' | 'black' | 'retroPrint';
+/** 'none' or a frame kit id (assets/frames/manifest.json, e.g. 'classic_polaroid'). */
+export type FrameId = string;
 
+/**
+ * The editor's frame: a kit frame built around the photo (the photo keeps its
+ * size and aspect; the saved image grows by the border). The paper texture
+ * itself is the frame's own (registry default); these are its amounts.
+ */
 export interface FrameSettings {
   id: FrameId;
-  /** Border width, 0…100 (scaled to the frame style's own default range). */
-  borderWidth: number;
-  /** Border colour, #RRGGBB. */
+  /** Paper colour, #RRGGBB (the kit's editable colour by default). */
   color: string;
-  /** Gap between the photo and the border (a mat), 0…100. */
-  padding: number;
+  /** Border thickness, % of the kit frame's own borders, 0…200. */
+  thickness: number;
   /** Photo corner radius, 0…100. */
   cornerRadius: number;
+  /** Paper texture strength, 0…100. */
+  texture: number;
+  /** Yellowing, darker edges, foxing, 0…100. */
+  aging: number;
+  /** Chipped, whitened outer edges, 0…100. */
+  edgeWear: number;
 }
 
 export type DateStampPosition = 'bottomRight' | 'bottomLeft' | 'topRight' | 'topLeft';

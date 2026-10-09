@@ -8,6 +8,9 @@ import type {
   LightLeakStyle,
 } from '@/types/film';
 
+import { defaultCornerRadius } from '@/image-engine/frame/frameGeometry';
+import { getFramePreset } from '@/image-engine/frame/registry';
+
 import { colors } from './theme';
 
 export const DEFAULT_FILM_SEED = 1;
@@ -78,28 +81,69 @@ export const BURN_STYLES: readonly { id: FilmBurnStyle; label: string; swatch: s
 
 // ── Frames ──────────────────────────────────────────────────────
 
-export interface FrameStyle {
-  id: FrameId;
-  label: string;
-  /** Defaults applied when the frame is chosen. */
-  defaults: Omit<FrameSettings, 'id'>;
+export const NO_FRAME: FrameSettings = { id: 'none', color: '#FFFFFF', thickness: 100, cornerRadius: 0, texture: 0, aging: 0, edgeWear: 0 };
+
+/** Paper texture a frame uses for its 질감 slider (its own, or warm paper for clean ones). */
+export function frameTextureId(id: FrameId): string {
+  return getFramePreset(id)?.paper.texture ?? 'warm_paper';
 }
 
-export const FRAME_STYLES: readonly FrameStyle[] = [
-  { id: 'none', label: 'None', defaults: { borderWidth: 0, color: '#FFFFFF', padding: 0, cornerRadius: 0 } },
-  { id: 'polaroid', label: 'Polaroid', defaults: { borderWidth: 50, color: '#FBF8F1', padding: 0, cornerRadius: 0 } },
-  { id: 'border35', label: '35mm', defaults: { borderWidth: 40, color: '#141210', padding: 0, cornerRadius: 30 } },
-  { id: 'filmStrip', label: 'Film Strip', defaults: { borderWidth: 50, color: '#16130F', padding: 0, cornerRadius: 10 } },
-  { id: 'white', label: 'White', defaults: { borderWidth: 40, color: '#FFFFFF', padding: 0, cornerRadius: 0 } },
-  { id: 'black', label: 'Black', defaults: { borderWidth: 40, color: '#111111', padding: 0, cornerRadius: 0 } },
-  { id: 'retroPrint', label: 'Retro Print', defaults: { borderWidth: 45, color: '#F1E7D3', padding: 0, cornerRadius: 20 } },
-];
-
-export const NO_FRAME: FrameSettings = { id: 'none', ...FRAME_STYLES[0]!.defaults };
-
+/** A kit frame with its vintage defaults (colour, corners, paper). Unknown ids → no frame. */
 export function frameDefaults(id: FrameId): FrameSettings {
-  const style = FRAME_STYLES.find((f) => f.id === id) ?? FRAME_STYLES[0]!;
-  return { id: style.id, ...style.defaults };
+  const preset = id === 'none' ? null : getFramePreset(id);
+  if (!preset) return NO_FRAME;
+  return {
+    id,
+    color: preset.defaultColor,
+    thickness: 100,
+    cornerRadius: defaultCornerRadius(preset.spec),
+    texture: preset.paper.texture ? preset.paper.textureIntensity : 0,
+    aging: preset.paper.aging,
+    edgeWear: preset.paper.edgeWear,
+  };
+}
+
+export function frameLabel(id: FrameId): string {
+  return id === 'none' ? 'None' : (getFramePreset(id)?.name ?? '프레임');
+}
+
+/** Frames before the kit (v1 edits, recipes, settings) → the kit frame that replaced them. */
+const LEGACY_FRAMES: Record<string, { id: string; color?: string }> = {
+  polaroid: { id: 'classic_polaroid' },
+  border35: { id: 'negative_35mm' },
+  filmStrip: { id: 'film_strip' },
+  white: { id: 'thin_border', color: '#FFFFFF' },
+  black: { id: 'thin_border', color: '#111111' },
+  retroPrint: { id: 'rounded_print' },
+};
+
+/** Legacy or kit frame id → a kit id ('none' when unknown). */
+export function migrateFrameId(id: unknown): FrameId {
+  if (typeof id !== 'string' || id === 'none') return 'none';
+  if (LEGACY_FRAMES[id]) return LEGACY_FRAMES[id].id;
+  return getFramePreset(id) ? id : 'none';
+}
+
+/** Any stored frame (older formats, partial documents) → current settings. */
+export function completeFrame(raw: unknown): FrameSettings {
+  if (typeof raw !== 'object' || raw === null) return NO_FRAME;
+  const r = raw as Partial<FrameSettings> & { id?: unknown };
+  const legacy = typeof r.id === 'string' ? LEGACY_FRAMES[r.id] : undefined;
+  const id = migrateFrameId(r.id);
+  const base = frameDefaults(id);
+  if (id === 'none') return base;
+  // A legacy frame starts from the kit frame's defaults; only its colour choice carries over.
+  if (legacy) return { ...base, color: legacy.color ?? base.color };
+  const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  return {
+    id,
+    color: typeof r.color === 'string' ? r.color : base.color,
+    thickness: num(r.thickness, base.thickness),
+    cornerRadius: num(r.cornerRadius, base.cornerRadius),
+    texture: num(r.texture, base.texture),
+    aging: num(r.aging, base.aging),
+    edgeWear: num(r.edgeWear, base.edgeWear),
+  };
 }
 
 export const FRAME_COLORS: readonly string[] = ['#FFFFFF', '#FBF8F1', '#F1E7D3', '#E9DCCB', '#141210', '#2B2621', '#C9B9A6'];

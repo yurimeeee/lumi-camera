@@ -1,4 +1,4 @@
-import { FRAME_STYLES } from '@/constants/film';
+import { frameLabel } from '@/constants/film';
 import { getFilter } from '@/constants/filters';
 import type { Recipe } from '@/types/recipes';
 
@@ -13,7 +13,7 @@ export function recipeSummary(r: Recipe): string {
   if (f.leak.intensity > 0) parts.push('빛샘');
   if (f.burn.intensity > 0) parts.push('번');
   if (f.dust > 0 || f.scratch > 0) parts.push('먼지·스크래치');
-  if (r.frame.id !== 'none') parts.push(FRAME_STYLES.find((s) => s.id === r.frame.id)?.label ?? '프레임');
+  if (r.frame.id !== 'none') parts.push(frameLabel(r.frame.id));
   if (r.stamp.show) parts.push('날짜');
   return parts.join(' · ');
 }

@@ -1,5 +1,5 @@
 import type { SkImage } from '@shopify/react-native-skia';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { IconButton } from '@/components/common/IconButton';
@@ -31,39 +31,55 @@ import { showToast } from '@/stores/toastStore';
 import type { CropAspectId, SourceImage } from '@/types/editing';
 import type { LookTab } from '@/types/filters';
 
+import { CurvesPanel } from './CurvesPanel';
 import type { Brush } from './EditorCanvas';
+import { ADJUST_VIEWS, FILTER_VIEWS, type AdjustView, type FilterView } from './editorNav';
+import { HslPanel } from './HslPanel';
+import { SubTabs } from './SubTabs';
 import { ToolSliderPanel } from './ToolSliderPanel';
 
-export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
+interface FilterPanelProps {
+  thumbImage: SkImage | null;
+  view: FilterView;
+  onViewChange: (view: FilterView) => void;
+  /** Preset category (shared by Presets and Mix). */
+  tab: LookTab;
+  onTabChange: (tab: LookTab) => void;
+}
+
+/**
+ * 필터: Presets (filter categories, favourites), Mix (filter B layered on
+ * the selected look) and My Recipe (saved looks: apply, long press to manage,
+ * + to save the current edit).
+ */
+export function FilterPanel({ thumbImage, view, onViewChange, tab, onTabChange }: FilterPanelProps) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
   const recipeId = useEditorStore((s) => s.present.recipeId);
   const recipe = useRecipe(recipeId);
   const mix = useEditorStore((s) => s.present.mix);
   const { setFilter, setIntensity, commit, applyLook, setMix, setMixIntensity } = useEditorStore.getState();
-  /** Which filter the carousel and slider edit: A (base) or B (mixed in after A). */
-  const [slot, setSlot] = useState<'a' | 'b'>('a');
-  const [tab, setTab] = useState<LookTab>('all');
   const [managing, setManaging] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   const filterFavorite = useIsFavorite(filterId);
   const filter = getFilter(filterId);
   const favorite = recipe ? recipe.favorite : filterFavorite;
-  const selectedA = recipe ? recipeLookId(recipe.id) : filterId;
-  const selectedId = slot === 'b' ? (mix?.filterId ?? 'original') : selectedA;
+  const selectedLook = recipe ? recipeLookId(recipe.id) : filterId;
+  const lookName = recipe ? recipe.name : filter.name;
 
   const onSelect = useCallback(
     (id: string) => {
-      if (slot === 'b') {
-        setMix(id === 'original' ? null : { filterId: id, intensity: mix?.intensity ?? 50 });
-        return;
-      }
       const rid = parseRecipeLookId(id);
       const r = rid ? getRecipe(rid) : null;
       if (r) applyLook(recipeToLook(r), r.id);
       else setFilter(id);
     },
-    [applyLook, setFilter, setMix, slot, mix],
+    [applyLook, setFilter],
+  );
+
+  const onSelectMix = useCallback(
+    (id: string) => setMix(id === 'original' ? null : { filterId: id, intensity: mix?.intensity ?? 50 }),
+    [setMix, mix],
   );
 
   const saveAsRecipe = async (name: string) => {
@@ -75,31 +91,57 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
     showToast(`‘${name}’ 레시피를 저장했어요`);
   };
 
-  const mixRow = (
-    <View style={styles.mixRow}>
-      <SlotChip
-        slot="A"
-        name={recipe ? recipe.name : filter.name}
-        value={intensity}
-        selected={slot === 'a'}
-        onPress={() => setSlot('a')}
-      />
-      <Text style={styles.mixPlus}>→</Text>
-      <SlotChip
-        slot="B"
-        name={mix ? getFilter(mix.filterId).name : '필터 혼합'}
-        value={mix ? mix.intensity : null}
-        selected={slot === 'b'}
-        onPress={() => setSlot('b')}
-        onRemove={mix ? () => setMix(null) : undefined}
-      />
-    </View>
+  const saveButton = (
+    <IconButton
+      icon="bookmark-outline"
+      color={colors.textSecondary}
+      size={18}
+      accessibilityLabel="지금 보정을 레시피로 저장 (Save as Recipe)"
+      onPress={() => setNaming(true)}
+    />
   );
 
-  if (slot === 'b') {
-    return (
-      <View>
-        {mixRow}
+  const lookRow =
+    filterId !== 'original' || recipe ? (
+      <View style={styles.intensityRow}>
+        <Text style={styles.filterName} numberOfLines={1}>
+          {lookName}
+        </Text>
+        <View style={styles.flex}>
+          <SliderControl
+            value={intensity}
+            onChange={setIntensity}
+            onComplete={commit}
+            resetValue={recipe ? recipe.color.intensity : 80}
+            accessibilityLabel="필터 강도"
+          />
+        </View>
+        <IconButton
+          icon={favorite ? 'heart' : 'heart-outline'}
+          color={favorite ? colors.accent : colors.textSecondary}
+          size={18}
+          accessibilityLabel={favorite ? '즐겨찾기 해제' : '즐겨찾기'}
+          onPress={() => {
+            feedback.light();
+            if (recipe) useRecipeStore.getState().toggleFavorite(recipe.id);
+            else useFilterStore.getState().toggleFavorite(filterId);
+          }}
+        />
+        {saveButton}
+      </View>
+    ) : (
+      <View style={styles.intensityRow}>
+        <Text style={[styles.hint, styles.flex]}>
+          {view === 'recipes' ? '저장한 레시피를 골라 한 번에 적용해 보세요' : '필터를 골라 분위기를 입혀보세요'}
+        </Text>
+        {saveButton}
+      </View>
+    );
+
+  let body: ReactNode;
+  if (view === 'mix') {
+    body = (
+      <>
         <View style={styles.intensityRow}>
           {mix ? (
             <>
@@ -109,84 +151,67 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
               <View style={styles.flex}>
                 <SliderControl value={mix.intensity} onChange={setMixIntensity} onComplete={commit} resetValue={50} accessibilityLabel="혼합 필터 강도" />
               </View>
+              <IconButton icon="close-circle-outline" size={18} color={colors.textSecondary} accessibilityLabel="혼합 해제" onPress={() => setMix(null)} />
             </>
           ) : (
-            <Text style={[styles.hint, styles.flex]}>A 위에 순서대로 겹칠 필터 B를 골라 주세요</Text>
+            <Text style={[styles.hint, styles.flex]} numberOfLines={1}>
+              {filterId !== 'original' || recipe ? `‘${lookName}’ 위에 겹칠 필터를 골라 주세요` : '지금 사진 위에 겹칠 필터를 골라 주세요'}
+            </Text>
           )}
         </View>
         <FilterCarousel
-          selectedId={selectedId}
-          onSelect={onSelect}
+          selectedId={mix?.filterId ?? 'original'}
+          onSelect={onSelectMix}
           image={thumbImage}
           tab={tab}
-          onTabChange={setTab}
+          onTabChange={onTabChange}
           thumbWidth={56}
           thumbHeight={70}
           showRecipes={false}
         />
-      </View>
+      </>
+    );
+  } else if (view === 'recipes') {
+    body = (
+      <>
+        {lookRow}
+        <FilterCarousel
+          selectedId={selectedLook}
+          onSelect={onSelect}
+          image={thumbImage}
+          tab="my"
+          onTabChange={onTabChange}
+          thumbWidth={56}
+          thumbHeight={70}
+          hideTabs
+          onRecipeLongPress={setManaging}
+          onAddRecipe={() => setNaming(true)}
+        />
+        <Text style={styles.recipeNote}>길게 눌러 이름 변경 · 즐겨찾기 · 삭제</Text>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        {lookRow}
+        <FilterCarousel
+          selectedId={selectedLook}
+          onSelect={onSelect}
+          image={thumbImage}
+          tab={tab}
+          onTabChange={onTabChange}
+          thumbWidth={56}
+          thumbHeight={70}
+          showRecipes={false}
+        />
+      </>
     );
   }
 
   return (
     <View>
-      {mixRow}
-      {filterId !== 'original' || recipe ? (
-        <View style={styles.intensityRow}>
-          <Text style={styles.filterName} numberOfLines={1}>
-            {recipe ? recipe.name : filter.name}
-          </Text>
-          <View style={styles.flex}>
-            <SliderControl
-              value={intensity}
-              onChange={setIntensity}
-              onComplete={commit}
-              resetValue={recipe ? recipe.color.intensity : 80}
-              accessibilityLabel="필터 강도"
-            />
-          </View>
-          <IconButton
-            icon={favorite ? 'heart' : 'heart-outline'}
-            color={favorite ? colors.accent : colors.textSecondary}
-            size={18}
-            accessibilityLabel={favorite ? '즐겨찾기 해제' : '즐겨찾기'}
-            onPress={() => {
-              feedback.light();
-              if (recipe) useRecipeStore.getState().toggleFavorite(recipe.id);
-              else useFilterStore.getState().toggleFavorite(filterId);
-            }}
-          />
-          <IconButton
-            icon="bookmark-outline"
-            color={colors.textSecondary}
-            size={18}
-            accessibilityLabel="지금 보정을 레시피로 저장 (Save as Recipe)"
-            onPress={() => setNaming(true)}
-          />
-        </View>
-      ) : (
-        <View style={styles.intensityRow}>
-          <Text style={[styles.hint, styles.flex]}>필터를 골라 분위기를 입혀보세요</Text>
-          <IconButton
-            icon="bookmark-outline"
-            color={colors.textSecondary}
-            size={18}
-            accessibilityLabel="지금 보정을 레시피로 저장 (Save as Recipe)"
-            onPress={() => setNaming(true)}
-          />
-        </View>
-      )}
-      <FilterCarousel
-        selectedId={selectedId}
-        onSelect={onSelect}
-        image={thumbImage}
-        tab={tab}
-        onTabChange={setTab}
-        thumbWidth={56}
-        thumbHeight={70}
-        onRecipeLongPress={setManaging}
-        onAddRecipe={() => setNaming(true)}
-      />
+      <SubTabs options={FILTER_VIEWS} value={view} onChange={onViewChange} accessibilityLabel="필터 메뉴" />
+      {body}
       <RecipeActionsSheet recipeId={managing} onClose={() => setManaging(null)} onApply={(id) => onSelect(recipeLookId(id))} />
       <TextPromptDialog
         visible={naming}
@@ -203,42 +228,15 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
   );
 }
 
-/** Filter slot of a mix: "A Mellow 80" / "B Film 35 40" (B is applied on A's result). */
-function SlotChip({
-  slot,
-  name,
-  value,
-  selected,
-  onPress,
-  onRemove,
-}: {
-  slot: 'A' | 'B';
-  name: string;
-  value: number | null;
-  selected: boolean;
-  onPress: () => void;
-  onRemove?: () => void;
-}) {
+/** 조정: 기본 (light & colour sliders), HSL and 커브 — same edit data, grouped in one menu. */
+export function AdjustMenu({ view, onViewChange }: { view: AdjustView; onViewChange: (view: AdjustView) => void }) {
   return (
-    <PressableScale
-      onPress={() => {
-        feedback.selection();
-        onPress();
-      }}
-      style={[styles.slot, selected && styles.slotSelected]}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`필터 ${slot} ${name}${value !== null ? ` ${value}` : ''}`}
-    >
-      <Text style={[styles.slotTag, selected && styles.slotTagSelected]}>{slot}</Text>
-      <Text style={[styles.slotName, selected && styles.slotNameSelected]} numberOfLines={1}>
-        {name}
-        {value !== null ? ` ${value}` : ''}
-      </Text>
-      {onRemove ? (
-        <IconButton icon="close" size={14} color={selected ? colors.white : colors.textSecondary} accessibilityLabel="혼합 해제" onPress={onRemove} />
-      ) : null}
-    </PressableScale>
+    <View>
+      <SubTabs options={ADJUST_VIEWS} value={view} onChange={onViewChange} accessibilityLabel="조정 메뉴" />
+      {view === 'basic' ? <AdjustPanel /> : null}
+      {view === 'hsl' ? <HslPanel /> : null}
+      {view === 'curves' ? <CurvesPanel /> : null}
+    </View>
   );
 }
 
@@ -421,45 +419,6 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  mixRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  mixPlus: {
-    ...typography.caption,
-    color: colors.textTertiary,
-  },
-  slot: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 32,
-    paddingLeft: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-  },
-  slotSelected: {
-    backgroundColor: colors.text,
-  },
-  slotTag: {
-    ...typography.micro,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-  slotTagSelected: {
-    color: colors.accentSoft,
-  },
-  slotName: {
-    ...typography.filterName,
-    flex: 1,
-  },
-  slotNameSelected: {
-    color: colors.white,
-  },
   intensityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,5 +479,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
+  },
+  recipeNote: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.textTertiary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
 });

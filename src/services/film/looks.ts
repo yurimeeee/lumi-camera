@@ -1,5 +1,5 @@
 import { DEFAULT_ADJUSTMENTS } from '@/constants/adjustments';
-import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE, frameDefaults, NO_FRAME } from '@/constants/film';
+import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE, frameDefaults, migrateFrameId, NO_FRAME } from '@/constants/film';
 import type { FilmCamera } from '@/constants/filmCameras';
 import { DEFAULT_CURVES } from '@/services/color/curves';
 import { DEFAULT_HSL } from '@/services/color/hsl';
@@ -70,7 +70,7 @@ export function filmCameraLook(camera: FilmCamera, o: FilmCameraOptions): Look {
     hsl: DEFAULT_HSL,
     curves: DEFAULT_CURVES,
     film: scaleFilm(film, k),
-    frame: o.frame === 'camera' ? frameDefaults(camera.frameId) : frameDefaults(o.frame),
+    frame: frameDefaults(migrateFrameId(o.frame === 'camera' ? camera.frameId : o.frame)),
     dateStamp: o.dateStamp,
     stamp: o.stamp,
   };

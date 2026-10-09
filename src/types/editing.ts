@@ -45,7 +45,7 @@ export interface SplitTone {
 
 export type Rotation = 0 | 90 | 180 | 270;
 
-export type CropAspectId = 'free' | 'original' | '1:1' | '4:3' | '3:4' | '16:9' | '9:16';
+export type CropAspectId = 'free' | 'original' | '1:1' | '4:3' | '3:4' | '4:5' | '16:9' | '9:16';
 
 /** Crop rectangle normalised to 0…1 against the rotated/flipped image. */
 export interface NormalizedRect {

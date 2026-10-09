@@ -37,5 +37,7 @@ plugin({
       exports: { default: storage, ...storage },
       loader: 'object',
     }));
+    // Metro asset modules (the frame kit's textures and caption font) → their file path.
+    build.onLoad({ filter: /\.(png|jpe?g|ttf)$/ }, (args) => ({ exports: { default: args.path }, loader: 'object' }));
   },
 });

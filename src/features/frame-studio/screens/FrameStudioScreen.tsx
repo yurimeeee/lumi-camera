@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -60,10 +60,15 @@ const TABS: readonly { id: Tab; label: string; icon: IconName; activeIcon: IconN
 const PANEL_H = 214;
 
 /** Opens the studio with photos (from the editor, library or home). */
-export function openFrameStudio(photos: readonly ImageRef[]) {
+export type StudioTab = Tab;
+
+/** Opens the studio on `photos`, optionally on a given tab (e.g. Layouts from the editor's Frame menu). */
+export function openFrameStudio(photos: readonly ImageRef[], tab?: StudioTab) {
   useStudioStore.getState().open(createDocument(photos));
-  router.push('/studio');
+  router.push(tab ? { pathname: '/studio', params: { tab } } : '/studio');
 }
+
+const isTab = (v: unknown): v is Tab => typeof v === 'string' && TABS.some((t) => t.id === v);
 
 async function pickPhotos(limit: number): Promise<ImageRef[]> {
   const picked = await pickImagesFromSystem(limit);
@@ -87,7 +92,8 @@ export default function FrameStudioScreen() {
   const kit = useKitBank();
   const thumb = useThumbPhoto(doc?.pool[0] ?? null);
 
-  const [tab, setTab] = useState<Tab>('frames');
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<Tab>(() => (isTab(params.tab) ? params.tab : 'frames'));
   // The selection a tab press put away (a new tap brings the actions back).
   const [hiddenSelection, setHiddenSelection] = useState<typeof selection>(null);
   const showSelection = !!selection && selection !== hiddenSelection;

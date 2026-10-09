@@ -16,7 +16,7 @@ export const RETOUCH_CATEGORIES: readonly { id: RetouchCategory; label: string }
   { id: 'face', label: '얼굴형' },
   { id: 'eyes', label: '눈' },
   { id: 'nose', label: '코' },
-  { id: 'lips', label: '입' },
+  { id: 'lips', label: '입술' },
   { id: 'proportion', label: '비율' },
 ];
 

@@ -1,43 +1,56 @@
-import { Group, Rect, RoundedRect } from '@shopify/react-native-skia';
-import { memo } from 'react';
+import { Picture, Skia } from '@shopify/react-native-skia';
+import { memo, useEffect, useMemo, useState } from 'react';
 
+import type { AssetBank } from '@/image-engine/frame/bank';
+import { loadKit } from '@/image-engine/frame/FrameAssetLoader';
+import { drawKitFrame } from '@/image-engine/frame/FrameRenderer';
+import { seedOf } from '@/image-engine/frame/skiaKit';
 import type { FrameSettings } from '@/types/film';
 
-import { brightness, shade, type FrameLayout } from './frameLayout';
+import { framePaper, type FrameLayout } from './frameLayout';
 
 interface Props {
   frame: FrameSettings;
   layout: FrameLayout;
+  /** Kit textures + caption font; null while loading (flat paper, no captions). */
+  bank: AssetBank | null;
 }
 
+/** Kit textures + caption font, loaded the first time a frame is shown (`active`). */
+export function useFrameBank(active: boolean): AssetBank | null {
+  const [bank, setBank] = useState<AssetBank | null>(null);
+  useEffect(() => {
+    if (!active || bank) return;
+    let alive = true;
+    loadKit()
+      .then((k) => alive && setBank({ ...k, images: new Map() }))
+      .catch((e) => __DEV__ && console.warn('[frame] kit', e));
+    return () => {
+      alive = false;
+    };
+  }, [active, bank]);
+  return bank;
+}
+
+/** Same, for one-off renders (export). */
+export async function loadFrameBank(): Promise<AssetBank> {
+  return { ...(await loadKit()), images: new Map() };
+}
+
+const EMPTY_BANK: AssetBank = { textures: new Map(), decorations: new Map(), images: new Map(), typeface: null };
+
 /**
- * The frame around the photo (drawn under it): border colour, an optional
- * mat, film strip sprocket holes, 35mm edge marks, a print's rounded edge.
- * Drawn at the layout's own coordinates (0, 0 = outer top-left).
+ * The kit frame around the photo — paper (colour × texture × ageing × wear)
+ * and the frame's own perforations, ruling and captions — drawn by the same
+ * renderer as Frame Studio, at the layout's coordinates (0, 0 = outer
+ * top-left). Its window is the photo, so it can sit over or under it.
  */
-export const FrameLayer = memo(function FrameLayer({ frame, layout }: Props) {
-  if (frame.id === 'none') return null;
-  const dark = brightness(frame.color) < 0.5;
-  const matColor = shade(frame.color, dark ? 0.12 : -0.05);
-  return (
-    <Group>
-      <RoundedRect x={0} y={0} width={layout.width} height={layout.height} r={layout.outerRadius} color={frame.color} />
-      {layout.mat ? (
-        <RoundedRect
-          x={layout.mat.x}
-          y={layout.mat.y}
-          width={layout.mat.width}
-          height={layout.mat.height}
-          r={layout.radius * 1.2}
-          color={matColor}
-        />
-      ) : null}
-      {layout.holes.map((h, i) => (
-        <RoundedRect key={i} x={h.x} y={h.y} width={h.width} height={h.height} r={h.width * 0.18} color="#E9E2D6" />
-      ))}
-      {layout.marks.map((m, i) => (
-        <Rect key={i} x={m.x} y={m.y} width={m.width} height={m.height} color="#D9822B" opacity={0.75} />
-      ))}
-    </Group>
-  );
+export const FrameLayer = memo(function FrameLayer({ frame, layout, bank }: Props) {
+  const picture = useMemo(() => {
+    const recorder = Skia.PictureRecorder();
+    const canvas = recorder.beginRecording(Skia.XYWHRect(0, 0, layout.width, layout.height));
+    drawKitFrame(canvas, layout.preset, framePaper(frame), seedOf(frame.id), layout.geometry, bank ?? EMPTY_BANK);
+    return recorder.finishRecordingAsPicture();
+  }, [frame, layout, bank]);
+  return <Picture picture={picture} />;
 });

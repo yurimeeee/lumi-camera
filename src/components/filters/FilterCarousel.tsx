@@ -45,6 +45,8 @@ interface Props {
   onAddRecipe?: () => void;
   /** Tap on the already selected look (e.g. to show its intensity slider). */
   onReselect?: () => void;
+  /** Hides the category chips (the parent picks the tab, e.g. the editor's My Recipe view). */
+  hideTabs?: boolean;
 }
 
 const filterItem = (f: FilterDefinition): Item => ({ kind: 'filter', key: f.id, filter: f });
@@ -64,6 +66,7 @@ export const FilterCarousel = memo(function FilterCarousel({
   onRecipeLongPress,
   onAddRecipe,
   onReselect,
+  hideTabs = false,
 }: Props) {
   const favorites = useFilterStore((s) => s.favorites);
   const recipes = useRecipeStore((s) => s.recipes);
@@ -184,7 +187,7 @@ export const FilterCarousel = memo(function FilterCarousel({
 
   return (
     <View>
-      <ChipTabs tabs={showRecipes ? LOOK_TABS : FILTER_TABS} value={activeTab} onChange={onTabChange} tone={tone} />
+      {hideTabs ? null : <ChipTabs tabs={showRecipes ? LOOK_TABS : FILTER_TABS} value={activeTab} onChange={onTabChange} tone={tone} />}
       <FlatList
         ref={listRef}
         horizontal

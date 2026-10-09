@@ -8,7 +8,7 @@ import { useEditorStore } from '@/stores/editorStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { showToast } from '@/stores/toastStore';
 
-import { openFrameStudio } from '../screens/FrameStudioScreen';
+import { openFrameStudio, type StudioTab } from '../screens/FrameStudioScreen';
 
 /**
  * Editor → Frame Studio: the current edit is rendered at export resolution
@@ -17,7 +17,7 @@ import { openFrameStudio } from '../screens/FrameStudioScreen';
  */
 export function useOpenStudioFromEditor(typeface: SkTypeface | null) {
   const [opening, setOpening] = useState(false);
-  const open = useCallback(async () => {
+  const open = useCallback(async (tab?: StudioTab) => {
     const { source, present } = useEditorStore.getState();
     if (!source || opening) return;
     setOpening(true);
@@ -30,7 +30,7 @@ export function useOpenStudioFromEditor(typeface: SkTypeface | null) {
         stampTypeface: typeface,
       });
       const uri = await storeStudioFile(out.uri);
-      openFrameStudio([{ uri, width: out.width, height: out.height }]);
+      openFrameStudio([{ uri, width: out.width, height: out.height }], tab);
     } catch (e) {
       showToast('프레임 스튜디오를 열지 못했어요');
       if (__DEV__) console.warn('[studio open]', e);

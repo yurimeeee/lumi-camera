@@ -2,18 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { ChipTabs } from '@/components/common/ChipTabs';
 import { DatePickerSheet } from '@/components/common/DatePickerSheet';
 import { ColorSwatches, OptionChips } from '@/components/common/OptionChips';
 import { PressableScale } from '@/components/common/PressableScale';
 import { SliderControl } from '@/components/common/SliderControl';
+import { FramePicker } from '@/components/editor/FramePicker';
 import {
   BURN_STYLES,
   DATE_STAMP_COLORS,
   DATE_STAMP_POSITIONS,
   DEFAULT_FILM,
   FRAME_COLORS,
-  FRAME_STYLES,
   frameDefaults,
   LEAK_STYLES,
   newFilmSeed,
@@ -25,17 +24,8 @@ import type { AdjustmentKey } from '@/types/editing';
 import type { FilmEffects } from '@/types/film';
 import { DATE_FORMATS, formatDateStamp, stampDateOf } from '@/utils/dateStamp';
 
-type Category = 'grain' | 'light' | 'leak' | 'burn' | 'texture' | 'frame' | 'date';
-
-const CATEGORIES: readonly { id: Category; label: string }[] = [
-  { id: 'grain', label: '그레인' },
-  { id: 'light', label: '빛' },
-  { id: 'leak', label: '빛샘' },
-  { id: 'burn', label: '번' },
-  { id: 'texture', label: '질감' },
-  { id: 'frame', label: '프레임' },
-  { id: 'date', label: '날짜' },
-];
+import { EFFECTS_VIEWS, type EffectsView } from './editorNav';
+import { SubTabs } from './SubTabs';
 
 interface RowProps {
   label: string;
@@ -47,7 +37,7 @@ interface RowProps {
 }
 
 /** One labelled slider; commits one undo step when released. */
-function Row({ label, value, min = 0, max = 100, reset = 0, onChange }: RowProps) {
+export function Row({ label, value, min = 0, max = 100, reset = 0, onChange }: RowProps) {
   const commit = useEditorStore.getState().commit;
   return (
     <View style={styles.row}>
@@ -61,7 +51,7 @@ function Row({ label, value, min = 0, max = 100, reset = 0, onChange }: RowProps
   );
 }
 
-function Scroll({ children }: { children: ReactNode }) {
+export function Scroll({ children }: { children: ReactNode }) {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
       {children}
@@ -69,14 +59,18 @@ function Scroll({ children }: { children: ReactNode }) {
   );
 }
 
+/** Small heading inside a long effect list. */
+function Section({ title }: { title: string }) {
+  return <Text style={styles.section}>{title}</Text>;
+}
+
 /**
- * 필름: grain, light (bloom, halation, soft focus), light leak, film burn,
- * texture (dust, scratches, fringing, vignette, fade, flash, drift), frame
- * and date stamp. Every value is a parameter of the edit — nothing is baked —
- * and random patterns come from the edit's seed.
+ * 효과: 필름 (halation, film burn, texture: dust, scratches, fringing,
+ * flash, drift, vignette, fade), 그레인, 빛샘 and Bloom (with soft focus).
+ * Every value is a parameter of the edit — nothing is baked — and random
+ * patterns come from the edit's seed.
  */
-export function FilmPanel() {
-  const [category, setCategory] = useState<Category>('grain');
+export function EffectsPanel({ view, onViewChange }: { view: EffectsView; onViewChange: (view: EffectsView) => void }) {
   const film = useEditorStore((s) => s.present.film);
   const adjustments = useEditorStore((s) => s.present.adjustments);
   const { setFilm, setAdjustment } = useEditorStore.getState();
@@ -84,7 +78,40 @@ export function FilmPanel() {
   const adj = (key: AdjustmentKey) => (v: number) => setAdjustment(key, v);
 
   let body: ReactNode = null;
-  switch (category) {
+  switch (view) {
+    case 'film':
+      body = (
+        <Scroll>
+          <Section title="할레이션" />
+          <Row label="강도" value={film.halation.intensity} onChange={(v) => patch((f) => ({ ...f, halation: { ...f.halation, intensity: v } }))} />
+          <Row label="반경" value={film.halation.radius} reset={DEFAULT_FILM.halation.radius} onChange={(v) => patch((f) => ({ ...f, halation: { ...f.halation, radius: v } }))} />
+          <Row label="붉은 정도" value={film.halation.warmth} reset={DEFAULT_FILM.halation.warmth} onChange={(v) => patch((f) => ({ ...f, halation: { ...f.halation, warmth: v } }))} />
+          <Section title="필름 번" />
+          <OptionChips
+            options={BURN_STYLES.map((s) => ({ value: s.id, label: s.label, swatch: s.swatch }))}
+            // While the burn is off no style is selected, so tapping any style turns it on.
+            value={film.burn.intensity > 0 ? film.burn.style : null}
+            onChange={(style) => {
+              patch((f) => ({ ...f, burn: { ...f.burn, style, intensity: f.burn.intensity || 50 } }));
+              useEditorStore.getState().commit();
+            }}
+            accessibilityLabel="필름 번 스타일"
+          />
+          <Row label="강도" value={film.burn.intensity} onChange={(v) => patch((f) => ({ ...f, burn: { ...f.burn, intensity: v } }))} />
+          <Row label="퍼짐" value={film.burn.spread} reset={DEFAULT_FILM.burn.spread} onChange={(v) => patch((f) => ({ ...f, burn: { ...f.burn, spread: v } }))} />
+          <Row label="위치" value={film.burn.position} reset={DEFAULT_FILM.burn.position} onChange={(v) => patch((f) => ({ ...f, burn: { ...f.burn, position: v } }))} />
+          <Section title="질감" />
+          <Row label="먼지" value={film.dust} onChange={(v) => patch((f) => ({ ...f, dust: v }))} />
+          <Row label="스크래치" value={film.scratch} onChange={(v) => patch((f) => ({ ...f, scratch: v }))} />
+          <Row label="색수차" value={film.fringing} onChange={(v) => patch((f) => ({ ...f, fringing: v }))} />
+          <Row label="플래시" value={film.flash} onChange={(v) => patch((f) => ({ ...f, flash: v }))} />
+          <Row label="색 편차" value={film.drift} onChange={(v) => patch((f) => ({ ...f, drift: v }))} />
+          <Row label="비네팅" value={adjustments.vignette} min={-100} onChange={adj('vignette')} />
+          <Row label="페이드" value={adjustments.fade} onChange={adj('fade')} />
+          <SeedButton />
+        </Scroll>
+      );
+      break;
     case 'grain':
       body = (
         <Scroll>
@@ -93,19 +120,6 @@ export function FilmPanel() {
           <Row label="거칠기" value={film.grain.roughness} reset={DEFAULT_FILM.grain.roughness} onChange={(v) => patch((f) => ({ ...f, grain: { ...f.grain, roughness: v } }))} />
           <Row label="색 노이즈" value={film.grain.color} onChange={(v) => patch((f) => ({ ...f, grain: { ...f.grain, color: v } }))} />
           <SeedButton />
-        </Scroll>
-      );
-      break;
-    case 'light':
-      body = (
-        <Scroll>
-          <Row label="블룸" value={film.bloom.intensity} onChange={(v) => patch((f) => ({ ...f, bloom: { ...f.bloom, intensity: v } }))} />
-          <Row label="블룸 기준" value={film.bloom.threshold} reset={DEFAULT_FILM.bloom.threshold} onChange={(v) => patch((f) => ({ ...f, bloom: { ...f.bloom, threshold: v } }))} />
-          <Row label="블룸 반경" value={film.bloom.radius} reset={DEFAULT_FILM.bloom.radius} onChange={(v) => patch((f) => ({ ...f, bloom: { ...f.bloom, radius: v } }))} />
-          <Row label="할레이션" value={film.halation.intensity} onChange={(v) => patch((f) => ({ ...f, halation: { ...f.halation, intensity: v } }))} />
-          <Row label="할레이션 반경" value={film.halation.radius} reset={DEFAULT_FILM.halation.radius} onChange={(v) => patch((f) => ({ ...f, halation: { ...f.halation, radius: v } }))} />
-          <Row label="붉은 정도" value={film.halation.warmth} reset={DEFAULT_FILM.halation.warmth} onChange={(v) => patch((f) => ({ ...f, halation: { ...f.halation, warmth: v } }))} />
-          <Row label="소프트 포커스" value={film.softFocus} onChange={(v) => patch((f) => ({ ...f, softFocus: v }))} />
         </Scroll>
       );
       break;
@@ -129,52 +143,21 @@ export function FilmPanel() {
         </Scroll>
       );
       break;
-    case 'burn':
+    case 'bloom':
       body = (
         <Scroll>
-          <OptionChips
-            options={BURN_STYLES.map((s) => ({ value: s.id, label: s.label, swatch: s.swatch }))}
-            value={film.burn.intensity > 0 ? film.burn.style : null}
-            onChange={(style) => {
-              patch((f) => ({ ...f, burn: { ...f.burn, style, intensity: f.burn.intensity || 50 } }));
-              useEditorStore.getState().commit();
-            }}
-            accessibilityLabel="번 스타일"
-          />
-          <Row label="강도" value={film.burn.intensity} onChange={(v) => patch((f) => ({ ...f, burn: { ...f.burn, intensity: v } }))} />
-          <Row label="퍼짐" value={film.burn.spread} reset={DEFAULT_FILM.burn.spread} onChange={(v) => patch((f) => ({ ...f, burn: { ...f.burn, spread: v } }))} />
-          <Row label="위치" value={film.burn.position} reset={DEFAULT_FILM.burn.position} onChange={(v) => patch((f) => ({ ...f, burn: { ...f.burn, position: v } }))} />
-          <SeedButton />
+          <Row label="강도" value={film.bloom.intensity} onChange={(v) => patch((f) => ({ ...f, bloom: { ...f.bloom, intensity: v } }))} />
+          <Row label="기준 밝기" value={film.bloom.threshold} reset={DEFAULT_FILM.bloom.threshold} onChange={(v) => patch((f) => ({ ...f, bloom: { ...f.bloom, threshold: v } }))} />
+          <Row label="반경" value={film.bloom.radius} reset={DEFAULT_FILM.bloom.radius} onChange={(v) => patch((f) => ({ ...f, bloom: { ...f.bloom, radius: v } }))} />
+          <Row label="소프트 포커스" value={film.softFocus} onChange={(v) => patch((f) => ({ ...f, softFocus: v }))} />
         </Scroll>
       );
-      break;
-    case 'texture':
-      body = (
-        <Scroll>
-          <Row label="먼지" value={film.dust} onChange={(v) => patch((f) => ({ ...f, dust: v }))} />
-          <Row label="스크래치" value={film.scratch} onChange={(v) => patch((f) => ({ ...f, scratch: v }))} />
-          <Row label="색수차" value={film.fringing} onChange={(v) => patch((f) => ({ ...f, fringing: v }))} />
-          <Row label="비네팅" value={adjustments.vignette} min={-100} onChange={adj('vignette')} />
-          <Row label="페이드" value={adjustments.fade} onChange={adj('fade')} />
-          <Row label="플래시" value={film.flash} onChange={(v) => patch((f) => ({ ...f, flash: v }))} />
-          <Row label="색 편차" value={film.drift} onChange={(v) => patch((f) => ({ ...f, drift: v }))} />
-          <SeedButton />
-        </Scroll>
-      );
-      break;
-    case 'frame':
-      body = <FrameSection />;
-      break;
-    case 'date':
-      body = <DateSection />;
       break;
   }
 
   return (
     <View>
-      <View style={styles.chips}>
-        <ChipTabs tabs={CATEGORIES} value={category} onChange={setCategory} />
-      </View>
+      <SubTabs options={EFFECTS_VIEWS} value={view} onChange={onViewChange} accessibilityLabel="효과 메뉴" />
       {body}
     </View>
   );
@@ -199,28 +182,30 @@ function SeedButton() {
   );
 }
 
-function FrameSection() {
+export function FrameSection() {
   const frame = useEditorStore((s) => s.present.frame);
   const { setFrame, commit } = useEditorStore.getState();
   const has = frame.id !== 'none';
+  const defaults = frameDefaults(frame.id);
+  const swatches = [defaults.color, ...FRAME_COLORS.filter((c) => c.toLowerCase() !== defaults.color.toLowerCase())];
   return (
     <Scroll>
-      <OptionChips
-        options={FRAME_STYLES.map((s) => ({ value: s.id, label: s.label }))}
+      <FramePicker
         value={frame.id}
         onChange={(id) => {
           setFrame(() => frameDefaults(id));
           commit();
         }}
-        accessibilityLabel="프레임"
       />
       {has ? (
         <>
-          <Row label="테두리" value={frame.borderWidth} reset={frameDefaults(frame.id).borderWidth} onChange={(v) => setFrame((f) => ({ ...f, borderWidth: v }))} />
-          <Row label="여백" value={frame.padding} onChange={(v) => setFrame((f) => ({ ...f, padding: v }))} />
-          <Row label="모서리" value={frame.cornerRadius} reset={frameDefaults(frame.id).cornerRadius} onChange={(v) => setFrame((f) => ({ ...f, cornerRadius: v }))} />
+          <Row label="두께" value={frame.thickness} min={20} max={200} reset={100} onChange={(v) => setFrame((f) => ({ ...f, thickness: v }))} />
+          <Row label="모서리" value={frame.cornerRadius} reset={defaults.cornerRadius} onChange={(v) => setFrame((f) => ({ ...f, cornerRadius: v }))} />
+          <Row label="종이 질감" value={frame.texture} reset={defaults.texture} onChange={(v) => setFrame((f) => ({ ...f, texture: v }))} />
+          <Row label="빈티지" value={frame.aging} reset={defaults.aging} onChange={(v) => setFrame((f) => ({ ...f, aging: v }))} />
+          <Row label="모서리 마모" value={frame.edgeWear} reset={defaults.edgeWear} onChange={(v) => setFrame((f) => ({ ...f, edgeWear: v }))} />
           <ColorSwatches
-            colors={FRAME_COLORS}
+            colors={swatches}
             value={frame.color}
             onChange={(color) => {
               setFrame((f) => ({ ...f, color }));
@@ -236,7 +221,7 @@ function FrameSection() {
   );
 }
 
-function DateSection() {
+export function DateSection() {
   const on = useEditorStore((s) => s.present.dateStamp);
   const style = useEditorStore((s) => s.present.stamp);
   const date = useEditorStore((s) => stampDateOf(s.source, s.present));
@@ -331,8 +316,11 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  chips: {
-    marginBottom: spacing.xs,
+  section: {
+    ...typography.micro,
+    color: colors.textTertiary,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xs,
   },
   scroll: {
     maxHeight: 196,

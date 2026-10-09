@@ -10,7 +10,8 @@ import { join } from 'path';
 
 import { DEFAULT_ADJUSTMENTS } from '@/constants/adjustments';
 import { BUILTIN_PRESETS } from '@/constants/cameraPresets';
-import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE, FRAME_STYLES, frameDefaults, isNeutralFilm, NO_FRAME } from '@/constants/film';
+import { completeFilm, completeFrame, DEFAULT_FILM, DEFAULT_STAMP_STYLE, frameDefaults, isNeutralFilm, NO_FRAME } from '@/constants/film';
+import { framePresets } from '@/image-engine/frame/registry';
 import { FILM_CAMERAS } from '@/constants/filmCameras';
 import { getFilter } from '@/constants/filters';
 import { frameLayout } from '@/render/frameLayout';
@@ -235,7 +236,7 @@ describe('film cameras', () => {
     let maxChroma = 0;
     for (let i = 0; i < mono.data.length; i += 4) maxChroma = Math.max(maxChroma, Math.max(mono.data[i]!, mono.data[i + 1]!, mono.data[i + 2]!) - Math.min(mono.data[i]!, mono.data[i + 1]!, mono.data[i + 2]!));
     expect(maxChroma).toBeLessThanOrEqual(8); // grain only
-    expect(looks[5]!.frame.id).toBe('polaroid');
+    expect(looks[5]!.frame.id).toBe('classic_polaroid');
     for (const c of FILM_CAMERAS) {
       const zero = filmCameraLook(c, { intensity: 0, grainScale: 100, frame: 'none', dateStamp: false, stamp: DEFAULT_STAMP_STYLE, seed: 1 });
       expect(isIdentity(resolveProcessing({ ...zero, filter: getFilter(zero.filterId) }))).toBe(true);
@@ -290,7 +291,7 @@ describe('filter mix', () => {
 const LOOK: Look = {
   ...plainLook({ filterId: 'mellow', intensity: 60, mix: { filterId: 'film-35', intensity: 40 }, adjustments: { ...DEFAULT_ADJUSTMENTS, grain: 30 }, hsl: DEFAULT_HSL, curves: DEFAULT_CURVES }),
   film: film({ halation: { intensity: 20, radius: 40, warmth: 40 }, leak: { style: 'red', intensity: 35, position: 12, rotation: 0, scale: 50 }, dust: 20 }),
-  frame: frameDefaults('polaroid'),
+  frame: frameDefaults('classic_polaroid'),
   dateStamp: true,
   stamp: { ...DEFAULT_STAMP_STYLE, position: 'topLeft', color: '#FFFFFF' },
 };
@@ -363,30 +364,38 @@ describe('date stamp', () => {
 });
 
 describe('frames', () => {
-  test('keep the photo’s size and aspect; the output grows by the border', () => {
-    for (const s of FRAME_STYLES) {
+  test('kit frames keep the photo’s size and aspect; the output grows by the border', () => {
+    expect(frameLayout(NO_FRAME, 4032, 3024)).toBeNull();
+    for (const p of framePresets()) {
       for (const [w, h] of [[4032, 3024], [3024, 4032], [1080, 1080]] as const) {
-        const L = frameLayout(frameDefaults(s.id), w, h);
+        const L = frameLayout(frameDefaults(p.id), w, h)!;
         expect(L.photo.width).toBe(w);
         expect(L.photo.height).toBe(h);
-        expect(L.width).toBe(L.photo.x * 2 + w);
-        expect(L.height).toBeGreaterThanOrEqual(h);
-        if (s.id === 'none') expect([L.width, L.height]).toEqual([w, h]);
+        expect(Number.isInteger(L.photo.x) && Number.isInteger(L.photo.y)).toBe(true);
+        expect(L.width).toBeGreaterThan(w);
+        expect(L.height).toBeGreaterThan(h);
       }
     }
-    const pol = frameLayout(frameDefaults('polaroid'), 1000, 1000);
+    const pol = frameLayout(frameDefaults('classic_polaroid'), 1000, 1000)!;
     expect(pol.height - pol.photo.y - pol.photo.height).toBeGreaterThan(pol.photo.y * 3); // thick bottom
-    const strip = frameLayout(frameDefaults('filmStrip'), 1500, 1000);
-    expect(strip.holes.length).toBeGreaterThan(4);
-    for (const h of strip.holes) {
-      const inTop = h.y + h.height <= strip.photo.y;
-      const inBottom = h.y >= strip.photo.y + strip.photo.height;
-      expect(inTop || inBottom).toBe(true);
-    }
+    // Thickness scales the borders; the photo stays.
+    const thin = frameLayout({ ...frameDefaults('classic_polaroid'), thickness: 50 }, 1000, 1000)!;
+    expect(thin.photo.x).toBeCloseTo(pol.photo.x / 2, 0);
+    expect(thin.photo.width).toBe(1000);
     // Same frame on the preview (scaled) has the same proportions.
-    const big = frameLayout(frameDefaults('polaroid'), 4000, 3000);
-    const small = frameLayout(frameDefaults('polaroid'), 400, 300, false);
+    const big = frameLayout(frameDefaults('classic_polaroid'), 4000, 3000)!;
+    const small = frameLayout(frameDefaults('classic_polaroid'), 400, 300, false)!;
     expect(big.width / big.height).toBeCloseTo(small.width / small.height, 2);
+  });
+
+  test('frames saved before the kit map to their kit replacements', () => {
+    expect(completeFrame({ id: 'polaroid', borderWidth: 50, color: '#FBF8F1', padding: 0, cornerRadius: 0 }).id).toBe('classic_polaroid');
+    expect(completeFrame({ id: 'filmStrip', borderWidth: 50, color: '#16130F', padding: 0, cornerRadius: 10 }).id).toBe('film_strip');
+    expect(completeFrame({ id: 'black', borderWidth: 40, color: '#111111', padding: 0, cornerRadius: 0 })).toEqual({ ...frameDefaults('thin_border'), color: '#111111' });
+    expect(completeFrame({ id: 'nope' })).toEqual(NO_FRAME);
+    expect(completeFrame(undefined)).toEqual(NO_FRAME);
+    const custom = { ...frameDefaults('old_paper'), thickness: 140, aging: 80 };
+    expect(completeFrame(custom)).toEqual(custom);
   });
 });
 

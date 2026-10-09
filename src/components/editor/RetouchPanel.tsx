@@ -45,6 +45,9 @@ interface Props {
   onFocusChange: (target: FocusTarget | null) => void;
   /** Opens 잡티 제거 (tap to heal) in the touch tool. */
   onOpenBlemish: () => void;
+  /** Body area tab (kept by the editor so it survives menu switches). */
+  category: RetouchCategory;
+  onCategoryChange: (category: RetouchCategory) => void;
 }
 
 const UNSUPPORTED_NOTE =
@@ -72,7 +75,7 @@ const CATEGORY_NAME: Record<FaceCategory, string> = {
   face: '얼굴형',
   eyes: '눈',
   nose: '코',
-  lips: '입',
+  lips: '입술',
   proportion: '비율',
 };
 
@@ -108,7 +111,7 @@ function focusOf(category: RetouchCategory, key: string, side: EyeSide): FocusTa
 const pickFace = (r: FaceRetouch) => Object.fromEntries(FACE_SKIN_KEYS.map((k) => [k, r[k]])) as Pick<FaceRetouch, (typeof FACE_SKIN_KEYS)[number]>;
 
 /**
- * Retouch: Skin (texture/tone on any photo, plus tools that need a face's
+ * 인물 (portrait retouch): Skin (texture/tone on any photo, plus tools that need a face's
  * regions) and the landmark-based face tools (Face, Eyes, Nose, Lips,
  * Proportion). Face values belong to the selected face; sliders update live
  * and commit one undo step when released.
@@ -123,8 +126,9 @@ export function RetouchPanel({
   onDebugLandmarks,
   onFocusChange,
   onOpenBlemish,
+  category,
+  onCategoryChange: setCategory,
 }: Props) {
-  const [category, setCategory] = useState<RetouchCategory>('skin');
   const [activeTool, setActiveTool] = useState<Record<RetouchCategory, string>>({
     skin: SKIN_TOOLS[0]!.key,
     face: FACE_TOOLS.face[0]!.key,

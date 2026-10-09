@@ -9,20 +9,13 @@ import { IconButton } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
 import { CropOverlay } from '@/components/editor/CropOverlay';
 import { EditorCanvas, fitContain } from '@/components/editor/EditorCanvas';
-import { EditorToolbar, type EditorTool } from '@/components/editor/EditorToolbar';
-import {
-  AdjustPanel,
-  CropPanel,
-  DEFAULT_BRUSH,
-  FilterPanel,
-  toBrush,
-  TouchPanel,
-} from '@/components/editor/panels';
-import { CurvesPanel } from '@/components/editor/CurvesPanel';
-import { useOpenStudioFromEditor } from '@/features/frame-studio/hooks/useOpenStudioFromEditor';
-import { FilmPanel } from '@/components/editor/FilmPanel';
-import { HslPanel } from '@/components/editor/HslPanel';
+import { DEFAULT_NAV, type EditorNav, type EditorTool } from '@/components/editor/editorNav';
+import { EditorToolbar } from '@/components/editor/EditorToolbar';
+import { EffectsPanel } from '@/components/editor/FilmPanel';
+import { FramePanel } from '@/components/editor/FramePanel';
+import { AdjustMenu, CropPanel, DEFAULT_BRUSH, FilterPanel, toBrush, TouchPanel } from '@/components/editor/panels';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
+import { useOpenStudioFromEditor } from '@/features/frame-studio/hooks/useOpenStudioFromEditor';
 import { aspectRatioOf } from '@/constants/crop';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { useFaces } from '@/hooks/useFaces';
@@ -47,6 +40,9 @@ export default function EditorScreen() {
   const { undo, redo, resetAll, setCrop } = useEditorStore.getState();
 
   const [tool, setTool] = useState<EditorTool>('filter');
+  // Sub-tab of each menu, remembered while the editor is open.
+  const [nav, setNav] = useState<EditorNav>(DEFAULT_NAV);
+  const navTo = useCallback(<K extends keyof EditorNav>(key: K) => (value: EditorNav[K]) => setNav((n) => ({ ...n, [key]: value })), []);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [before, setBefore] = useState(false);
   const [brush, setBrush] = useState(DEFAULT_BRUSH);
@@ -64,7 +60,7 @@ export default function EditorScreen() {
   // away (and keep the result while face edits or skin smoothing need it,
   // e.g. after undo or a restore).
   const faceInUse = useEditorStore((s) => needsFaces(s.present));
-  const { faces: detected, status: faceStatus } = useFaces(source, faceInUse || tool === 'retouch');
+  const { faces: detected, status: faceStatus } = useFaces(source, faceInUse || tool === 'portrait');
   // Ids follow the faces the edit was made on (anchors), not detection order.
   const faceAnchors = useEditorStore((s) => s.present.faceAnchors);
   const faces = useMemo(
@@ -120,7 +116,7 @@ export default function EditorScreen() {
 
   const openBlemish = () => {
     setBrush((b) => ({ ...b, mode: 'spot' }));
-    setTool('reshape');
+    setTool('touch');
   };
 
   const onSave = async () => {
@@ -140,7 +136,7 @@ export default function EditorScreen() {
 
   const fitted = working && box.width > 0 ? fitContain(working.width, working.height, box.width, box.height) : null;
   const focus =
-    tool === 'retouch' && focusTarget && selectedFace && working
+    tool === 'portrait' && focusTarget && selectedFace && working
       ? focusRect(selectedFace, focusTarget, displayGeometry, working.width, working.height)
       : null;
 
@@ -161,13 +157,16 @@ export default function EditorScreen() {
               confirmAction({ title: '모든 편집을 초기화할까요?', confirmText: '초기화', destructive: true, onConfirm: resetAll })
             }
           />
-          <IconButton
-            icon="albums-outline"
-            size={20}
-            accessibilityLabel="프레임 스튜디오에서 꾸미기"
-            disabled={studio.opening}
-            onPress={studio.open}
-          />
+          <PressableScale
+            style={[styles.compare, before && styles.compareOn, (!working || cropping) && styles.compareOff]}
+            disabled={!working || cropping}
+            onPressIn={() => setBefore(true)}
+            onPressOut={() => setBefore(false)}
+            accessibilityRole="button"
+            accessibilityLabel="누르는 동안 원본 보기"
+          >
+            <Text style={[styles.compareText, before && styles.compareTextOn]}>{before ? 'Before' : 'After'}</Text>
+          </PressableScale>
         </View>
         <PressableScale
           style={[styles.save, saving && styles.saveBusy]}
@@ -195,12 +194,12 @@ export default function EditorScreen() {
               faces={faces}
               selectedFaceId={selectedFaceId}
               onSelectFace={setPickedFaceId}
-              showFaceGuides={tool === 'retouch' && faces.length > 1}
-              debugLandmarks={tool === 'retouch' && debugLandmarks}
-              brush={tool === 'reshape' ? brushTool : null}
+              showFaceGuides={tool === 'portrait' && faces.length > 1}
+              debugLandmarks={tool === 'portrait' && debugLandmarks}
+              brush={tool === 'touch' ? brushTool : null}
               zoomEnabled={!cropping}
               focus={focus}
-              autoFrame={tool === 'retouch'}
+              autoFrame={tool === 'portrait'}
               showFrame={!cropping}
             />
             {cropping && fitted ? (
@@ -218,27 +217,21 @@ export default function EditorScreen() {
         ) : (
           <ActivityIndicator color={colors.textSecondary} />
         )}
-
-        {!cropping && working ? (
-          <PressableScale
-            style={styles.beforeBtn}
-            onPressIn={() => setBefore(true)}
-            onPressOut={() => setBefore(false)}
-            accessibilityRole="button"
-            accessibilityLabel="누르는 동안 원본 보기"
-          >
-            <Text style={styles.beforeText}>{before ? 'Before' : 'After'}</Text>
-          </PressableScale>
-        ) : null}
       </View>
 
       <View style={[styles.panel, { paddingBottom: insets.bottom + spacing.xs }]}>
         <Animated.View key={tool} entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)} style={styles.panelBody}>
-          {tool === 'filter' ? <FilterPanel thumbImage={thumbImage} /> : null}
-          {tool === 'adjust' ? <AdjustPanel /> : null}
-          {tool === 'hsl' ? <HslPanel /> : null}
-          {tool === 'curves' ? <CurvesPanel /> : null}
-          {tool === 'retouch' ? (
+          {tool === 'filter' ? (
+            <FilterPanel
+              thumbImage={thumbImage}
+              view={nav.filter}
+              onViewChange={navTo('filter')}
+              tab={nav.filterTab}
+              onTabChange={navTo('filterTab')}
+            />
+          ) : null}
+          {tool === 'adjust' ? <AdjustMenu view={nav.adjust} onViewChange={navTo('adjust')} /> : null}
+          {tool === 'portrait' ? (
             <RetouchPanel
               faceStatus={faceStatus}
               faceCount={faces.length}
@@ -249,11 +242,16 @@ export default function EditorScreen() {
               onDebugLandmarks={setDebugLandmarks}
               onFocusChange={setFocusTarget}
               onOpenBlemish={openBlemish}
+              category={nav.portrait}
+              onCategoryChange={navTo('portrait')}
             />
           ) : null}
-          {tool === 'reshape' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}
+          {tool === 'touch' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}
+          {tool === 'effects' ? <EffectsPanel view={nav.effects} onViewChange={navTo('effects')} /> : null}
+          {tool === 'frame' ? (
+            <FramePanel view={nav.frame} onViewChange={navTo('frame')} onOpenStudio={studio.open} opening={studio.opening} />
+          ) : null}
           {tool === 'crop' ? <CropPanel source={source} /> : null}
-          {tool === 'film' ? <FilmPanel /> : null}
         </Animated.View>
         <EditorToolbar value={tool} onChange={setTool} />
       </View>
@@ -312,20 +310,29 @@ const styles = StyleSheet.create({
   cropLayer: {
     position: 'absolute',
   },
-  beforeBtn: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.lg + spacing.sm,
-    minHeight: 32,
-    paddingHorizontal: spacing.md,
+  compare: {
+    minHeight: 30,
+    minWidth: 54,
+    marginLeft: spacing.xs,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(36, 33, 30, 0.42)',
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  beforeText: {
+  compareOn: {
+    backgroundColor: colors.text,
+  },
+  compareOff: {
+    opacity: 0.35,
+  },
+  compareText: {
     ...typography.micro,
-    color: colors.white,
     fontSize: 11,
+    color: colors.text,
+  },
+  compareTextOn: {
+    color: colors.white,
   },
   panel: {
     backgroundColor: colors.surface,

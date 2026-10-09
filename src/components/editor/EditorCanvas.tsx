@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Canvas, Group, rect, rrect, type SkTypeface } from '@shopify/react-native-skia';
+import { Canvas, Group, Rect, rect, rrect, type SkTypeface } from '@shopify/react-native-skia';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -19,7 +19,7 @@ import { useReshapeField } from '@/hooks/useReshapeField';
 import type { WorkingImage } from '@/hooks/useWorkingImage';
 import { useZoom } from '@/hooks/useZoom';
 import { DateStampLayer } from '@/render/DateStampLayer';
-import { FrameLayer } from '@/render/FrameLayer';
+import { FrameLayer, useFrameBank } from '@/render/FrameLayer';
 import { frameLayout } from '@/render/frameLayout';
 import { FaceGuides, LandmarkDebugLayer, RegionDebugLayer } from '@/render/FaceOverlays';
 import { LumiLayer } from '@/render/LumiLayer';
@@ -130,7 +130,8 @@ export const EditorCanvas = memo(function EditorCanvas({
 
   // The frame (if any) fits the box; the photo sits inside it at its own aspect.
   const frame = showFrame ? frameState : null;
-  const unit = useMemo(() => (frame && frame.id !== 'none' ? frameLayout(frame, working.width, working.height, false) : null), [frame, working.width, working.height]);
+  const unit = useMemo(() => (frame ? frameLayout(frame, working.width, working.height, false) : null), [frame, working.width, working.height]);
+  const frameBank = useFrameBank(unit !== null);
   const outer = unit ? fitContain(unit.width, unit.height, boxWidth, boxHeight) : fitContain(working.width, working.height, boxWidth, boxHeight);
   const frameScale = unit ? outer.width / unit.width : 1;
   const width = unit ? Math.round(unit.photo.width * frameScale) : outer.width;
@@ -381,11 +382,8 @@ export const EditorCanvas = memo(function EditorCanvas({
       >
         <Canvas style={StyleSheet.absoluteFill}>
           <Group transform={photoTransform}>
-            {unit && frame && !showOriginal ? (
-              <Group transform={frameTransform}>
-                <FrameLayer frame={frame} layout={unit} />
-              </Group>
-            ) : null}
+            {/* Paper under the photo: the window's anti-aliased edge blends into the frame, not the background. */}
+            {unit && frame && !showOriginal ? <Rect x={0} y={0} width={width} height={height} color={frame.color} /> : null}
             <Group clip={photoClip}>
               <LumiLayer
                 image={working.image}
@@ -421,6 +419,11 @@ export const EditorCanvas = memo(function EditorCanvas({
                 />
               ) : null}
             </Group>
+            {unit && frame && !showOriginal ? (
+              <Group transform={frameTransform}>
+                <FrameLayer frame={frame} layout={unit} bank={frameBank} />
+              </Group>
+            ) : null}
           </Group>
         </Canvas>
         {brush ? (

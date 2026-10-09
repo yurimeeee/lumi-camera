@@ -6,8 +6,9 @@ export const CROP_ASPECTS: readonly { id: CropAspectId; label: string; ratio: nu
   { id: '1:1', label: '1:1', ratio: 1 },
   { id: '4:3', label: '4:3', ratio: 4 / 3 },
   { id: '3:4', label: '3:4', ratio: 3 / 4 },
-  { id: '16:9', label: '16:9', ratio: 16 / 9 },
+  { id: '4:5', label: '4:5', ratio: 4 / 5 },
   { id: '9:16', label: '9:16', ratio: 9 / 16 },
+  { id: '16:9', label: '16:9', ratio: 16 / 9 },
 ];
 
 /** Output aspect (w/h) for a locked crop, or null for free/original. */

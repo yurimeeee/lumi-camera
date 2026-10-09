@@ -106,7 +106,7 @@ export const FILM_CAMERAS: readonly FilmCamera[] = [
     colorPresetId: 'stock-polaroid',
     adjustments: { grain: 12, vignette: 15 },
     film: { drift: 45, softFocus: 10 },
-    frameId: 'polaroid',
+    frameId: 'classic_polaroid',
     dateStamp: false,
     ratio: '1:1',
     swatch: '#D7C4A3',

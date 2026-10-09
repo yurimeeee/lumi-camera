@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { DEFAULT_STAMP_STYLE } from '@/constants/film';
+import { DEFAULT_STAMP_STYLE, migrateFrameId } from '@/constants/film';
 import { DEFAULT_FILM_CAMERA_ID } from '@/constants/filmCameras';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
 import type { DateStampPosition, FrameId } from '@/types/film';
@@ -81,11 +81,16 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
     }),
     {
       name: 'lumi.settings',
-      version: 2,
+      version: 3,
       storage: persistStorage,
       partialize: ({ set: _set, reset: _reset, ...state }) => state,
       // v1 → v2: film settings added (missing keys take their defaults).
-      migrate: (state) => ({ ...DEFAULT_SETTINGS, ...(state as Partial<SettingsState>) }) as SettingsState & SettingsActions,
+      // v2 → v3: frames are the kit's (old frame ids map to their replacements).
+      migrate: (state) => {
+        const s = { ...DEFAULT_SETTINGS, ...(state as Partial<SettingsState>) };
+        if (s.defaultFrame !== 'camera') s.defaultFrame = migrateFrameId(s.defaultFrame);
+        return s as SettingsState & SettingsActions;
+      },
     },
   ),
 );

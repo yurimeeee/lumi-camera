@@ -3,22 +3,22 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import type { IconName } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, radius, spacing, typography } from '@/constants/theme';
 import { feedback } from '@/services/feedback';
 
-export type EditorTool = 'filter' | 'adjust' | 'hsl' | 'curves' | 'film' | 'retouch' | 'reshape' | 'crop';
+import type { EditorTool } from './editorNav';
 
 const TOOLS: readonly { id: EditorTool; label: string; icon: IconName; activeIcon: IconName }[] = [
   { id: 'filter', label: '필터', icon: 'color-filter-outline', activeIcon: 'color-filter' },
   { id: 'adjust', label: '조정', icon: 'options-outline', activeIcon: 'options' },
-  { id: 'hsl', label: 'HSL', icon: 'color-palette-outline', activeIcon: 'color-palette' },
-  { id: 'curves', label: '커브', icon: 'pulse-outline', activeIcon: 'pulse' },
-  { id: 'film', label: '필름', icon: 'film-outline', activeIcon: 'film' },
-  { id: 'retouch', label: '보정', icon: 'happy-outline', activeIcon: 'happy' },
-  { id: 'reshape', label: '터치', icon: 'hand-left-outline', activeIcon: 'hand-left' },
+  { id: 'portrait', label: '인물', icon: 'happy-outline', activeIcon: 'happy' },
+  { id: 'touch', label: '터치', icon: 'hand-left-outline', activeIcon: 'hand-left' },
+  { id: 'effects', label: '효과', icon: 'sparkles-outline', activeIcon: 'sparkles' },
+  { id: 'frame', label: '프레임', icon: 'albums-outline', activeIcon: 'albums' },
   { id: 'crop', label: '자르기', icon: 'crop-outline', activeIcon: 'crop' },
 ];
 
+/** Main editor menu: always at the bottom; the selected menu's tools open above it. */
 export function EditorToolbar({ value, onChange }: { value: EditorTool; onChange: (t: EditorTool) => void }) {
   return (
     <ScrollView
@@ -33,7 +33,7 @@ export function EditorToolbar({ value, onChange }: { value: EditorTool; onChange
         return (
           <PressableScale
             key={t.id}
-            style={styles.item}
+            style={[styles.item, selected && styles.itemSelected]}
             onPress={() => {
               if (selected) return;
               feedback.selection();
@@ -62,15 +62,20 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'space-around',
     paddingHorizontal: spacing.xs,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
+    gap: 2,
   },
   item: {
-    minWidth: 48,
-    paddingHorizontal: 2,
-    minHeight: 48,
+    minWidth: 50,
+    paddingHorizontal: 6,
+    minHeight: 52,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
+  },
+  itemSelected: {
+    backgroundColor: colors.surfaceMuted,
   },
   label: {
     ...typography.micro,

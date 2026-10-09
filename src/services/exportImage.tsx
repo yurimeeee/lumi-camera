@@ -1,10 +1,10 @@
-import { Group, rect, rrect, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
+import { Group, Rect, rect, rrect, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { getFilter } from '@/constants/filters';
 import { DateStampLayer } from '@/render/DateStampLayer';
-import { FrameLayer } from '@/render/FrameLayer';
+import { FrameLayer, loadFrameBank } from '@/render/FrameLayer';
 import { frameLayout } from '@/render/frameLayout';
 import { LumiLayer } from '@/render/LumiLayer';
 import { renderOffscreen } from '@/render/offscreen';
@@ -105,14 +105,16 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const date = stampDateOf(source, edit);
   const stamp = edit.dateStamp && opts.stampTypeface && date !== null ? formatDateStamp(date, edit.stamp.format) : null;
   const layout = frameLayout(edit.frame, width, height);
-  const { photo } = layout;
+  const frameBank = layout ? await loadFrameBank() : null;
+  const photo = layout?.photo ?? { x: 0, y: 0, width, height };
+  const radius = layout?.radius ?? 0;
 
   const rendered = await renderOffscreen(
     <Group>
-      <FrameLayer frame={edit.frame} layout={layout} />
+      {layout ? <Rect x={photo.x} y={photo.y} width={photo.width} height={photo.height} color={edit.frame.color} /> : null}
       <Group
         transform={[{ translateX: photo.x }, { translateY: photo.y }]}
-        clip={layout.radius > 0 ? rrect(rect(0, 0, width, height), layout.radius, layout.radius) : undefined}
+        clip={radius > 0 ? rrect(rect(0, 0, width, height), radius, radius) : undefined}
       >
         <LumiLayer
           image={image}
@@ -135,9 +137,10 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
           />
         ) : null}
       </Group>
+      {layout ? <FrameLayer frame={edit.frame} layout={layout} bank={frameBank} /> : null}
     </Group>,
-    layout.width,
-    layout.height,
+    layout?.width ?? width,
+    layout?.height ?? height,
   );
   reshape?.x.dispose();
   reshape?.y.dispose();
@@ -147,7 +150,7 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const bytes = encodeExport(raster, opts.format, opts.quality);
   // EXIF (date, optional GPS) is written for JPEG; PNG carries no EXIF here.
   const out = opts.format === 'jpeg' ? withExif(bytes, { takenAt: source.takenAt, location: opts.location }) : bytes;
-  return { uri: writeImage(out, 'lumi', opts.format), width: layout.width, height: layout.height };
+  return { uri: writeImage(out, 'lumi', opts.format), width: layout?.width ?? width, height: layout?.height ?? height };
 }
 
 

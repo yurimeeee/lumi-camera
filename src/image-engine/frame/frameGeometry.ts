@@ -81,9 +81,40 @@ export function frameGeometry(spec: FrameSpec, style: Pick<FrameStyle, 'thicknes
   top *= fitY;
   bottom *= fitY;
   const box = { x: left, y: top, width: w - left - right, height: h - top - bottom };
-  const holeRadius = pct(style.cornerRadius) * MAX_RADIUS * Math.min(box.width, box.height);
+  return geometryWithWindow(spec, style.cornerRadius, w, h, box, Math.min(sx, sy));
+}
+
+/**
+ * Geometry of a kit frame built *around* a photoW×photoH photo (the editor's
+ * frame): the window is exactly the photo, the borders are the asset's own
+ * (scaled so the asset's window just fits inside the photo) × thickness, and
+ * the print grows by them — the photo is never cropped or stretched. With
+ * `round`, borders are whole pixels (export).
+ */
+export function frameAroundPhoto(
+  spec: FrameSpec,
+  style: Pick<FrameStyle, 'thickness' | 'cornerRadius'>,
+  photoW: number,
+  photoH: number,
+  round = false,
+): FrameGeometry {
+  const { hole } = spec;
+  const s = Math.min(photoW / hole.width, photoH / hole.height);
+  const k = s * pct(style.thickness);
+  const r = (v: number) => (round ? Math.round(v) : v);
+  const left = r(hole.x * k);
+  const right = r((spec.width - hole.x - hole.width) * k);
+  const top = r(hole.y * k);
+  const bottom = r((spec.height - hole.y - hole.height) * k);
+  const box = { x: left, y: top, width: photoW, height: photoH };
+  return geometryWithWindow(spec, style.cornerRadius, left + photoW + right, top + photoH + bottom, box, s);
+}
+
+function geometryWithWindow(spec: FrameSpec, cornerRadius: number, w: number, h: number, box: Box, unit: number): FrameGeometry {
+  const { hole } = spec;
+  const holeRadius = pct(cornerRadius) * MAX_RADIUS * Math.min(box.width, box.height);
   const base = defaultCornerRadius(spec);
-  const outerRadius = Math.max(0, pct(style.cornerRadius - base)) * 0.05 * Math.min(w, h);
+  const outerRadius = Math.max(0, pct(cornerRadius - base)) * 0.05 * Math.min(w, h);
   const px = piecewise(hole.x, hole.x + hole.width, box.x, box.x + box.width, spec.width, w);
   const py = piecewise(hole.y, hole.y + hole.height, box.y, box.y + box.height, spec.height, h);
   return {
@@ -95,7 +126,7 @@ export function frameGeometry(spec: FrameSpec, style: Pick<FrameStyle, 'thicknes
     mapX: px.map,
     mapY: py.map,
     bandScaleY: py.scale,
-    unit: Math.min(sx, sy),
+    unit,
   };
 }
 
