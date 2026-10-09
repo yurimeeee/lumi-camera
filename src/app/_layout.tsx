@@ -31,6 +31,7 @@ export default function RootLayout() {
           <Stack.Screen name="favorites/index" />
           <Stack.Screen name="settings/index" />
           <Stack.Screen name="recipes/index" />
+          <Stack.Screen name="batch/index" />
         </Stack>
         <Toast />
       </View>

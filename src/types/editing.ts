@@ -1,3 +1,5 @@
+import type { DateStampStyle, FilmEffects, FilterMix, FrameSettings } from './film';
+
 /**
  * Shared editing vocabulary. Filters, user adjustments and retouch all speak
  * the same "-100…100" parameter language so they can be composed linearly
@@ -119,7 +121,19 @@ export interface EditState {
    * faces to these, so edits stay on the same person.
    */
   faceAnchors: Readonly<Record<string, FaceAnchor>>;
+  /** Filter B, applied on top of filter A + adjustments (null = no mix). */
+  mix: FilterMix | null;
+  /** Film effects (grain, bloom, halation, leaks, burn, dust…), see types/film. */
+  film: FilmEffects;
+  frame: FrameSettings;
+  /** Show the date stamp. */
   dateStamp: boolean;
+  stamp: DateStampStyle;
+  /**
+   * Date the user picked for the stamp when the photo's own capture date is
+   * unknown (SourceImage.dateKnown false). Never defaults to "today".
+   */
+  stampDate: number | null;
 }
 
 /** A face's position for re-identification: centre and size, normalised against the source image. */
@@ -222,6 +236,12 @@ export interface SourceImage {
   origin: 'camera' | 'library';
   /** Capture time (ms) used for the date stamp. */
   takenAt: number;
+  /**
+   * False when the capture date is unknown (system picker / web file without
+   * EXIF date): `takenAt` is then only an import time and is never stamped.
+   * Missing (older projects) means known.
+   */
+  dateKnown?: boolean;
   /** Position recorded at capture when "위치 정보 저장" is on. */
   location?: { latitude: number; longitude: number; altitude: number | null } | null;
 }

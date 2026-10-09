@@ -250,9 +250,112 @@ export const FILTERS: readonly FilterDefinition[] = [
   },
 ];
 
+/**
+ * Colour stocks of the film cameras (constants/filmCameras.ts). Regular
+ * filters, but not listed in the filter carousels: the film camera's own
+ * effects (grain, flash, halation…) are part of the camera, not the stock.
+ */
+export const FILM_STOCKS: readonly FilterDefinition[] = [
+  {
+    id: 'stock-classic35',
+    name: 'Classic 35',
+    category: 'film',
+    description: '따뜻한 하이라이트, 살짝 차가운 그림자의 35mm 컬러 네거티브',
+    params: { contrast: -4, saturation: -4, temperature: 4, highlights: -6 },
+    splitTone: { shadows: [0.46, 0.5, 0.55], highlights: [0.6, 0.53, 0.45], amount: 50 },
+    curves: { rgb: [{ x: 0, y: 0.04 }, { x: 0.25, y: 0.24 }, { x: 0.75, y: 0.78 }, { x: 1, y: 0.96 }] },
+    hsl: { orange: { saturation: -6, luminance: 6 }, green: { hue: 8, saturation: -10 } },
+    preview: [{ color: '#E9C29A', blend: 'soft-light', opacity: 0.32 }],
+  },
+  {
+    id: 'stock-disposable',
+    name: 'Disposable',
+    category: 'film',
+    description: '플래시 터진 일회용 카메라의 쨍한 대비',
+    params: { contrast: 22, saturation: 6, temperature: 8, tint: 4, highlights: -6 },
+    splitTone: { shadows: [0.47, 0.5, 0.53], highlights: [0.6, 0.54, 0.44], amount: 40 },
+    curves: { rgb: [{ x: 0, y: 0.05 }, { x: 0.3, y: 0.25 }, { x: 0.7, y: 0.78 }, { x: 1, y: 0.97 }] },
+    hsl: { green: { hue: 12, saturation: -8 }, yellow: { saturation: 8 } },
+    preview: [{ color: '#F0B77E', blend: 'soft-light', opacity: 0.4 }],
+  },
+  {
+    id: 'stock-ccd2004',
+    name: 'CCD 2004',
+    category: 'cool',
+    description: '차가운 화이트밸런스와 좁은 계조의 2000년대 디카',
+    params: { temperature: -18, tint: -4, contrast: 18, saturation: 10, highlights: 12, sharpness: 45 },
+    // Limited dynamic range: clipped whites, crushed blacks.
+    curves: {
+      rgb: [{ x: 0, y: 0 }, { x: 0.15, y: 0.08 }, { x: 0.8, y: 0.92 }, { x: 0.92, y: 1 }, { x: 1, y: 1 }],
+      blue: [{ x: 0, y: 0.03 }, { x: 0.5, y: 0.53 }, { x: 1, y: 1 }],
+    },
+    hsl: { blue: { saturation: 12 }, aqua: { saturation: 10 } },
+    preview: [{ color: '#AFC6E4', blend: 'soft-light', opacity: 0.45 }],
+  },
+  {
+    id: 'stock-retroflash',
+    name: 'Retro Flash',
+    category: 'film',
+    description: '어둠 속 플래시, 밝은 피사체와 깊은 배경',
+    params: { contrast: 30, shadows: -18, temperature: 4, saturation: 4 },
+    splitTone: { shadows: [0.43, 0.48, 0.58], highlights: [0.56, 0.52, 0.47], amount: 45 },
+    curves: { rgb: [{ x: 0, y: 0 }, { x: 0.3, y: 0.2 }, { x: 0.7, y: 0.82 }, { x: 1, y: 1 }] },
+    preview: [{ color: '#2E3550', blend: 'soft-light', opacity: 0.35 }],
+  },
+  {
+    id: 'stock-softdiary',
+    name: 'Soft Diary',
+    category: 'soft',
+    description: '뽀얗고 따뜻한 일상의 기록',
+    params: { contrast: -18, temperature: 12, saturation: -18, highlights: -14, brightness: 8, fade: 14 },
+    splitTone: { shadows: [0.53, 0.5, 0.48], highlights: [0.58, 0.54, 0.48], amount: 30 },
+    curves: { rgb: [{ x: 0, y: 0.06 }, { x: 0.5, y: 0.54 }, { x: 1, y: 0.95 }] },
+    hsl: { orange: { luminance: 8 } },
+    preview: [{ color: '#F6E2CC', blend: 'soft-light', opacity: 0.45 }],
+  },
+  {
+    id: 'stock-polaroid',
+    name: 'Polaroid',
+    category: 'film',
+    description: '바랜 듯 부드러운 즉석 필름',
+    params: { contrast: -10, saturation: -10, temperature: 6, fade: 10 },
+    splitTone: { shadows: [0.46, 0.52, 0.53], highlights: [0.6, 0.54, 0.45], amount: 45 },
+    curves: {
+      rgb: [{ x: 0, y: 0.06 }, { x: 0.25, y: 0.25 }, { x: 0.75, y: 0.77 }, { x: 1, y: 0.94 }],
+      blue: [{ x: 0, y: 0.06 }, { x: 1, y: 0.95 }],
+    },
+    hsl: { green: { hue: 10, saturation: -14 } },
+    preview: [{ color: '#D9C6A6', blend: 'soft-light', opacity: 0.4 }],
+  },
+  {
+    id: 'stock-cinema400',
+    name: 'Cinema 400',
+    category: 'film',
+    description: '청록 그림자와 따뜻한 하이라이트의 영화 필름',
+    params: { contrast: 8, saturation: -14, highlights: -16, shadows: -4 },
+    splitTone: { shadows: [0.42, 0.5, 0.56], highlights: [0.6, 0.52, 0.42], amount: 60 },
+    // Deep blacks, long highlight roll-off.
+    curves: { rgb: [{ x: 0, y: 0.02 }, { x: 0.2, y: 0.16 }, { x: 0.6, y: 0.63 }, { x: 0.85, y: 0.86 }, { x: 1, y: 0.94 }] },
+    hsl: { orange: { saturation: -4, luminance: 4 }, blue: { saturation: -15 }, green: { hue: 15, saturation: -20 } },
+    preview: [
+      { color: '#3E6E72', blend: 'soft-light', opacity: 0.25 },
+      { color: '#E8B48A', blend: 'soft-light', opacity: 0.25 },
+    ],
+  },
+  {
+    id: 'stock-monofilm',
+    name: 'Mono Film',
+    category: 'bw',
+    description: '깊은 검정과 자연스러운 중간톤의 흑백 필름',
+    params: { saturation: -100, contrast: 10 },
+    curves: { rgb: [{ x: 0, y: 0 }, { x: 0.2, y: 0.14 }, { x: 0.5, y: 0.5 }, { x: 0.85, y: 0.9 }, { x: 1, y: 1 }] },
+    preview: [{ color: '#808080', blend: 'saturation', opacity: 1 }],
+  },
+];
+
 export const ORIGINAL_FILTER_ID = 'original';
 
-const FILTER_MAP = new Map(FILTERS.map((f) => [f.id, f]));
+const FILTER_MAP = new Map([...FILTERS, ...FILM_STOCKS].map((f) => [f.id, f]));
 
 export function getFilter(id: string | null | undefined): FilterDefinition {
   return (id && FILTER_MAP.get(id)) || FILTER_MAP.get(ORIGINAL_FILTER_ID)!;

@@ -18,6 +18,8 @@ import {
   ShutterBlink,
   type Frame,
 } from '@/components/camera/overlays';
+import { FilmCameraCarousel } from '@/components/camera/FilmCameraCarousel';
+import { PresetSheet } from '@/components/camera/PresetSheet';
 import { QuickControls } from '@/components/camera/QuickControls';
 import { ShutterButton } from '@/components/camera/ShutterButton';
 import { IconButton } from '@/components/common/IconButton';
@@ -27,6 +29,7 @@ import { SliderControl } from '@/components/common/SliderControl';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
 import { RecipeActionsSheet } from '@/components/recipes/RecipeActionsSheet';
 import { FLASH_OPTIONS, labelOf, nextOf, RATIO_OPTIONS, TIMER_OPTIONS } from '@/constants/camera';
+import { getFilmCamera } from '@/constants/filmCameras';
 import { getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { useAppDimensions } from '@/hooks/useAppDimensions';
@@ -37,7 +40,7 @@ import { clearProject, loadProject, pruneStoredOriginals, restoreProject, type E
 import { feedback } from '@/services/feedback';
 import { isIdentity } from '@/services/imageProcessing';
 import { captureAspect } from '@/services/imagePipeline';
-import { useCameraStore, useCaptureRatio } from '@/stores/cameraStore';
+import { useCameraIntensity, useCameraStore, useCaptureRatio } from '@/stores/cameraStore';
 import { getRecipe, parseRecipeLookId } from '@/stores/recipeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { showToast } from '@/stores/toastStore';
@@ -73,6 +76,7 @@ export default function CameraScreen() {
   const [exposureOpen, setExposureOpen] = useState(false);
   const exposureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [managing, setManaging] = useState<string | null>(null);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [project, setProject] = useState<EditProject | null>(null);
 
   const facing = useCameraStore((s) => s.facing);
@@ -85,8 +89,26 @@ export default function CameraScreen() {
   const mirrorFront = useSettingsStore((s) => s.mirrorFront);
   const ratio = useCaptureRatio();
   const look = useCameraLook(filterName);
-  const { setFilter, setRecipe, setIntensity, setFilterTab, setFlash, setTimer, setGrid, setRatio, toggleFacing, setExposureBias } =
-    useCameraStore.getState();
+  const mode = look.mode;
+  const film = mode === 'film';
+  const filmCamera = film ? getFilmCamera(look.lookId) : null;
+  const photoIntensity = useCameraIntensity();
+  const {
+    setFilter,
+    setRecipe,
+    setIntensity,
+    setFilterTab,
+    setFlash,
+    setTimer,
+    setGrid,
+    setRatio,
+    toggleFacing,
+    setExposureBias,
+    setMode,
+    setFilmCamera,
+    setFilmIntensity,
+    setDateStampOverride,
+  } = useCameraStore.getState();
 
   const previewImage = usePreviewImage(lastPhotoUri);
   const { trigger, cancel, countdown, busy, blink } = useCapture({ cameraRef, ready, ratio, look });
@@ -178,6 +200,44 @@ export default function CameraScreen() {
 
   const lookLabel = look.name ? `${look.name}${look.intensity !== 100 ? ` ${look.intensity}` : ''}` : null;
 
+  const switchMode = (next: 'photo' | 'film') => {
+    if (next === mode) return;
+    feedback.selection();
+    setIntensityOpen(false);
+    setMode(next);
+    // A film camera brings its usual ratio (e.g. Polaroid 1:1).
+    if (next === 'film') {
+      const cam = getFilmCamera(useCameraStore.getState().filmCameraId ?? useSettingsStore.getState().defaultFilmCamera);
+      if (cam.ratio) setRatio(cam.ratio);
+    }
+  };
+
+  const chooseFilmCamera = (id: string) => {
+    setFilmCamera(id);
+    const cam = getFilmCamera(id);
+    if (cam.ratio) setRatio(cam.ratio);
+    if (cam.flash && cam.flash !== flash) {
+      setFlash(cam.flash);
+      showToast(`${cam.name} · 플래시 ${labelOf(FLASH_OPTIONS, cam.flash)}`);
+    }
+  };
+
+  const currentPreset = () => {
+    const c = useCameraStore.getState();
+    return {
+      mode,
+      filmCameraId: film ? look.lookId : null,
+      lookId: film ? look.look.filterId : look.lookId,
+      intensity: film ? look.intensity : photoIntensity,
+      film: c.presetFilm,
+      grain: c.grainOverride,
+      dateStamp: look.look.dateStamp,
+      stamp: look.look.stamp,
+      ratio,
+      flash,
+    };
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -192,7 +252,7 @@ export default function CameraScreen() {
               mirror={mirrorFront}
               active={focused}
               look={isIdentity(look.processing) ? null : look.processing}
-              filterId={look.color.filterId}
+              filterId={look.look.filterId}
               exposure={exposure}
               onReady={() => setReady(true)}
               onError={(m) => showToast(m)}
@@ -268,6 +328,20 @@ export default function CameraScreen() {
           >
             <Text style={styles.ratioText}>{labelOf(RATIO_OPTIONS, ratio)}</Text>
           </PressableScale>
+          <PressableScale
+            style={styles.textButton}
+            onPress={() => {
+              feedback.selection();
+              setDateStampOverride(!look.look.dateStamp);
+            }}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: look.look.dateStamp }}
+            // react-native-web only exposes the state through aria-*.
+            aria-checked={look.look.dateStamp}
+            accessibilityLabel="날짜 스탬프"
+          >
+            <Text style={[styles.dateText, look.look.dateStamp && styles.dateTextOn]}>DATE</Text>
+          </PressableScale>
           <IconButton
             icon={panelOpen ? 'chevron-up' : 'chevron-down'}
             color={colors.white}
@@ -317,12 +391,24 @@ export default function CameraScreen() {
               <View style={styles.flex}>
                 <SliderControl
                   value={look.intensity}
-                  onChange={setIntensity}
-                  resetValue={useSettingsStore.getState().defaultIntensity}
+                  onChange={film ? setFilmIntensity : setIntensity}
+                  resetValue={film ? useSettingsStore.getState().filmIntensity : useSettingsStore.getState().defaultIntensity}
                   tone="dark"
-                  accessibilityLabel="필터 강도"
+                  accessibilityLabel={film ? '필름 효과 강도' : '필터 강도'}
                 />
               </View>
+            </Animated.View>
+          ) : film && filmCamera ? (
+            <Animated.View key={filmCamera.id} entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} pointerEvents="none">
+              <View style={styles.filmTag}>
+                <View style={[styles.filmDot, { backgroundColor: filmCamera.swatch }]} />
+                <Text style={styles.filmName}>{filmCamera.name.toUpperCase()}</Text>
+              </View>
+              <Text style={styles.filmLabel}>
+                {filmCamera.label}
+                {look.intensity !== 100 ? ` · ${look.intensity}` : ''}
+              </Text>
+              {!LIVE_CAMERA.frameFilter ? <Text style={styles.approx}>미리보기는 근사치 · 촬영본에 정확히 적용</Text> : null}
             </Animated.View>
           ) : lookLabel ? (
             <Animated.View key={look.lookId} entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} pointerEvents="none">
@@ -345,22 +431,41 @@ export default function CameraScreen() {
           </Animated.View>
         ) : null}
 
-        <FilterCarousel
-          selectedId={look.lookId}
-          onSelect={onSelectLook}
-          onReselect={() => setIntensityOpen((v) => !v)}
-          onRecipeLongPress={setManaging}
-          image={previewImage}
-          tab={filterTab}
-          onTabChange={setFilterTab}
-          thumbWidth={52}
-          thumbHeight={64}
-        />
+        {film ? (
+          <View>
+            <Text style={styles.filmDesc} numberOfLines={1}>
+              {filmCamera?.description}
+            </Text>
+            <FilmCameraCarousel
+              selectedId={look.lookId}
+              onSelect={chooseFilmCamera}
+              onReselect={() => setIntensityOpen((v) => !v)}
+              image={previewImage}
+            />
+          </View>
+        ) : (
+          <FilterCarousel
+            selectedId={look.lookId}
+            onSelect={onSelectLook}
+            onReselect={() => setIntensityOpen((v) => !v)}
+            onRecipeLongPress={setManaging}
+            image={previewImage}
+            tab={filterTab}
+            onTabChange={setFilterTab}
+            thumbWidth={52}
+            thumbHeight={64}
+          />
+        )}
 
         <View style={styles.modes}>
-          <Text style={[styles.mode, styles.modeActive]}>PHOTO</Text>
-          <PressableScale onPress={() => showToast('동영상은 곧 만나요')} accessibilityRole="button">
-            <Text style={styles.mode}>VIDEO</Text>
+          <PressableScale onPress={() => switchMode('photo')} accessibilityRole="tab" accessibilityState={{ selected: !film }} accessibilityLabel="사진 모드">
+            <Text style={[styles.mode, !film && styles.modeActive]}>PHOTO</Text>
+          </PressableScale>
+          <PressableScale onPress={() => switchMode('film')} accessibilityRole="tab" accessibilityState={{ selected: film }} accessibilityLabel="필름 카메라 모드">
+            <Text style={[styles.mode, film && styles.modeActive, film && styles.modeFilm]}>FILM</Text>
+          </PressableScale>
+          <PressableScale onPress={() => setPresetsOpen(true)} accessibilityRole="button" accessibilityLabel="촬영 프리셋">
+            <Text style={styles.mode}>PRESET</Text>
           </PressableScale>
         </View>
 
@@ -391,6 +496,7 @@ export default function CameraScreen() {
       </View>
 
       <RecipeActionsSheet recipeId={managing} onClose={() => setManaging(null)} />
+      <PresetSheet visible={presetsOpen} onClose={() => setPresetsOpen(false)} current={currentPreset} />
     </View>
   );
 }
@@ -524,6 +630,48 @@ const styles = StyleSheet.create({
   modeActive: {
     color: colors.text,
     fontWeight: '700',
+  },
+  modeFilm: {
+    color: colors.accent,
+  },
+  dateText: {
+    ...typography.micro,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.whiteMuted,
+    fontWeight: '600',
+  },
+  dateTextOn: {
+    color: colors.dateStamp,
+  },
+  filmTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filmDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  filmName: {
+    ...typography.overline,
+    fontWeight: '300',
+    letterSpacing: 3,
+    color: colors.whiteSoft,
+  },
+  filmLabel: {
+    ...typography.micro,
+    letterSpacing: 1.4,
+    color: colors.dateStamp,
+    marginTop: 2,
+  },
+  filmDesc: {
+    ...typography.caption,
+    fontSize: 11,
+    textAlign: 'center',
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.lg,
   },
   controls: {
     flexDirection: 'row',

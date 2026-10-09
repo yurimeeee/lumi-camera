@@ -24,3 +24,17 @@ export function formatDateStamp(ms: number, format: DateFormat): string {
       return `${mm}/${dd}/${yyyy}`;
   }
 }
+
+/**
+ * The date to stamp on a photo: the date the user picked, else the capture
+ * date when it is known; null when neither exists (the stamp then isn't drawn
+ * and the editor asks for a date — never "today" by default).
+ */
+export function stampDateOf(
+  source: { takenAt: number; dateKnown?: boolean } | null,
+  edit: { stampDate: number | null },
+): number | null {
+  if (edit.stampDate !== null) return edit.stampDate;
+  if (source && source.dateKnown !== false) return source.takenAt;
+  return null;
+}

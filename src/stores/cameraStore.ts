@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { CameraFacing, CaptureRatio, FlashSetting, TimerSetting } from '@/types/settings';
+import { newFilmSeed } from '@/constants/film';
+import type { FilmEffects } from '@/types/film';
 import type { LookTab } from '@/types/filters';
+import type { CameraPreset } from '@/types/presets';
+import type { CameraFacing, CameraMode, CaptureRatio, FlashSetting, TimerSetting } from '@/types/settings';
 
 import { useSettingsStore } from './settingsStore';
 import { persistStorage } from './storage';
@@ -27,6 +30,26 @@ interface CameraState {
   filterTab: LookTab;
   /** Most recent capture/import, used for the gallery thumbnail and filter previews. */
   lastPhotoUri: string | null;
+
+  // ── Film mode / presets ──
+  mode: CameraMode;
+  /** Session film camera (null = the default from Settings). */
+  filmCameraId: string | null;
+  /** Session film camera strength 0…100 (null = Settings' 필름 효과 강도). */
+  filmIntensity: number | null;
+  /** Film effects from a preset (photo mode extras, or a film camera's replacement). */
+  presetFilm: FilmEffects | null;
+  /** Grain amount from a preset (null = the filter's / camera's own). */
+  grainOverride: number | null;
+  /** Session date stamp toggle (null = Settings / the film camera's default). */
+  dateStampOverride: boolean | null;
+  /** Preset the current setup came from (highlight only). */
+  presetId: string | null;
+  /**
+   * Seed for grain/dust/scratches in the preview and the next capture (so the
+   * capture renders what the preview showed); a new one after each shot.
+   */
+  filmSeed: number;
 }
 
 interface CameraActions {
@@ -42,6 +65,13 @@ interface CameraActions {
   setExposureBias: (v: number) => void;
   setFilterTab: (tab: LookTab) => void;
   setLastPhoto: (uri: string) => void;
+  setMode: (mode: CameraMode) => void;
+  setFilmCamera: (id: string) => void;
+  setFilmIntensity: (v: number) => void;
+  setDateStampOverride: (v: boolean) => void;
+  /** Applies a preset in one update (no camera restart: only look/options change). */
+  applyPreset: (p: CameraPreset) => void;
+  rerollSeed: () => void;
 }
 
 export const useCameraStore = create<CameraState & CameraActions>()(
@@ -59,24 +89,53 @@ export const useCameraStore = create<CameraState & CameraActions>()(
       exposureBias: 0,
       filterTab: 'all',
       lastPhotoUri: null,
+      mode: 'photo',
+      filmCameraId: null,
+      filmIntensity: null,
+      presetFilm: null,
+      grainOverride: null,
+      dateStampOverride: null,
+      presetId: null,
+      filmSeed: newFilmSeed(),
       toggleFacing: () => set((s) => ({ facing: s.facing === 'back' ? 'front' : 'back' })),
       setFlash: (flash) => set({ flash }),
       setTimer: (timer) => set({ timer }),
       setGrid: (grid) => set({ grid }),
       setRatio: (ratio) => set({ ratio }),
       setSkin: (skin) => set({ skin }),
-      setFilter: (filterId) => set({ filterId, recipeId: null }),
-      setRecipe: (recipeId) => set({ recipeId }),
+      setFilter: (filterId) => set({ filterId, recipeId: null, presetId: null }),
+      setRecipe: (recipeId) => set({ recipeId, presetId: null }),
       setIntensity: (intensity) => set({ intensity }),
       setExposureBias: (exposureBias) => set({ exposureBias }),
       setFilterTab: (filterTab) => set({ filterTab }),
       setLastPhoto: (lastPhotoUri) => set({ lastPhotoUri }),
+      setMode: (mode) => set({ mode }),
+      // A different camera brings its own effects: drop preset replacements.
+      setFilmCamera: (filmCameraId) => set({ filmCameraId, presetFilm: null, grainOverride: null, presetId: null }),
+      setFilmIntensity: (filmIntensity) => set({ filmIntensity }),
+      setDateStampOverride: (dateStampOverride) => set({ dateStampOverride }),
+      applyPreset: (p) =>
+        set((s) => ({
+          mode: p.mode,
+          ...(p.mode === 'film'
+            ? { filmCameraId: p.filmCameraId, filmIntensity: p.intensity }
+            : p.lookId.startsWith('recipe:')
+              ? { recipeId: p.lookId.slice(7), intensity: p.intensity }
+              : { filterId: p.lookId, recipeId: null, intensity: p.intensity }),
+          presetFilm: p.film,
+          grainOverride: p.grain,
+          dateStampOverride: p.dateStamp,
+          ratio: p.ratio,
+          flash: p.flash ?? s.flash,
+          presetId: p.id,
+        })),
+      rerollSeed: () => set({ filmSeed: newFilmSeed() }),
     }),
     {
       name: 'lumi.camera',
       version: 1,
       storage: persistStorage,
-      partialize: ({ facing, flash, timer, grid, skin }) => ({ facing, flash, timer, grid, skin }),
+      partialize: ({ facing, flash, timer, grid, skin, mode }) => ({ facing, flash, timer, grid, skin, mode }),
     },
   ),
 );

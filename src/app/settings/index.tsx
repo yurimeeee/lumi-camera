@@ -5,10 +5,13 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Header } from '@/components/common/Header';
+import { ColorSwatches, OptionChips } from '@/components/common/OptionChips';
 import { SliderControl } from '@/components/common/SliderControl';
 import { OptionSheet } from '@/components/settings/OptionSheet';
 import { SettingRow, SettingSection, SettingToggle } from '@/components/settings/SettingRow';
 import { labelOf, RATIO_OPTIONS, TIMER_OPTIONS } from '@/constants/camera';
+import { DATE_STAMP_COLORS, DATE_STAMP_POSITIONS, FRAME_STYLES } from '@/constants/film';
+import { FILM_CAMERAS, getFilmCamera } from '@/constants/filmCameras';
 import { FILTERS, getFilter } from '@/constants/filters';
 import { colors, spacing, typography } from '@/constants/theme';
 import { DATE_STAMP_FONT } from '@/render/DateStampLayer';
@@ -18,7 +21,20 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { DATE_FORMATS, formatDateStamp } from '@/utils/dateStamp';
 import { permissionDenied } from '@/utils/dialogs';
 
-type Sheet = 'timer' | 'dateFormat' | 'filter' | 'ratio' | 'intensity' | 'format' | 'quality' | null;
+type Sheet =
+  | 'timer'
+  | 'dateFormat'
+  | 'filter'
+  | 'ratio'
+  | 'intensity'
+  | 'format'
+  | 'quality'
+  | 'filmCamera'
+  | 'filmGrain'
+  | 'filmFrame'
+  | 'filmIntensity'
+  | 'stampStyle'
+  | null;
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -46,7 +62,7 @@ export default function SettingsScreen() {
           <SettingToggle
             icon="volume-mute-outline"
             label="무음 모드"
-            caption="Lumi 효과음을 꺼요. 시스템 셔터음은 기기·지역 정책을 따라요."
+            caption="Lumi 효과음을 꺼요. iPhone 시스템 셔터음은 끌 수 없어요(지역 정책상 강제되는 기기도 있어요)."
             enabled={s.silentMode}
             onChange={(v) => s.set('silentMode', v)}
           />
@@ -147,6 +163,35 @@ export default function SettingsScreen() {
           />
         </SettingSection>
 
+        <SettingSection title="필름 설정">
+          <SettingRow
+            icon="film-outline"
+            label="기본 필름 카메라"
+            value={getFilmCamera(s.defaultFilmCamera).name}
+            onPress={() => setSheet('filmCamera')}
+          />
+          <SettingRow icon="grid-outline" label="기본 그레인" value={`${s.filmGrain}%`} onPress={() => setSheet('filmGrain')} />
+          <SettingRow
+            icon="crop-outline"
+            label="기본 프레임"
+            value={s.defaultFrame === 'camera' ? '카메라 기본' : (FRAME_STYLES.find((f) => f.id === s.defaultFrame)?.label ?? '')}
+            onPress={() => setSheet('filmFrame')}
+          />
+          <SettingRow
+            icon="calendar-outline"
+            label="날짜 스탬프 스타일"
+            value={`${DATE_STAMP_POSITIONS.find((p) => p.id === s.stampPosition)?.label ?? ''} · ${s.stampSize}%`}
+            onPress={() => setSheet('stampStyle')}
+          />
+          <SettingRow
+            icon="contrast-outline"
+            label="필름 효과 강도"
+            value={`${s.filmIntensity}`}
+            onPress={() => setSheet('filmIntensity')}
+            last
+          />
+        </SettingSection>
+
         <SettingSection title="필터">
           <SettingRow icon="apps-outline" label="필터 둘러보기" onPress={() => router.push('/filters')} />
           <SettingRow icon="bookmark-outline" label="My Recipe 관리" onPress={() => router.push('/recipes')} />
@@ -226,6 +271,79 @@ export default function SettingsScreen() {
           useCameraStore.getState().setRatio(v);
         }}
         onClose={close}
+      />
+      <OptionSheet
+        visible={sheet === 'filmCamera'}
+        title="기본 필름 카메라"
+        options={FILM_CAMERAS.map((c) => ({ value: c.id, label: c.name, caption: `${c.label} · ${c.description}` }))}
+        value={s.defaultFilmCamera}
+        onSelect={(v) => {
+          s.set('defaultFilmCamera', v);
+          useCameraStore.getState().setFilmCamera(v);
+        }}
+        onClose={close}
+      />
+      <OptionSheet
+        visible={sheet === 'filmFrame'}
+        title="기본 프레임"
+        options={[
+          { value: 'camera' as const, label: '카메라 기본', caption: '카메라마다 정해진 프레임 (Polaroid는 폴라로이드 프레임)' },
+          ...FRAME_STYLES.map((f) => ({ value: f.id, label: f.label })),
+        ]}
+        value={s.defaultFrame}
+        onSelect={(v) => s.set('defaultFrame', v)}
+        onClose={close}
+      />
+      <OptionSheet
+        visible={sheet === 'filmGrain'}
+        title="기본 그레인"
+        options={[]}
+        value={0}
+        onSelect={() => undefined}
+        onClose={close}
+        footer={
+          <View style={styles.intensity}>
+            <Text style={styles.intensityHint}>필름 카메라마다 정해진 그레인의 몇 %로 찍을지 정해요</Text>
+            <SliderControl value={s.filmGrain} min={0} max={200} onChange={(v) => s.set('filmGrain', v)} resetValue={100} accessibilityLabel="기본 그레인" />
+          </View>
+        }
+      />
+      <OptionSheet
+        visible={sheet === 'filmIntensity'}
+        title="필름 효과 강도"
+        options={[]}
+        value={0}
+        onSelect={() => undefined}
+        onClose={close}
+        footer={
+          <View style={styles.intensity}>
+            <Text style={styles.intensityHint}>필름 카메라의 색감과 효과 전체의 세기예요</Text>
+            <SliderControl value={s.filmIntensity} onChange={(v) => s.set('filmIntensity', v)} resetValue={100} accessibilityLabel="필름 효과 강도" />
+          </View>
+        }
+      />
+      <OptionSheet
+        visible={sheet === 'stampStyle'}
+        title="날짜 스탬프 스타일"
+        options={[]}
+        value={0}
+        onSelect={() => undefined}
+        onClose={close}
+        footer={
+          <View style={styles.intensity}>
+            <Text style={[styles.stampText, fontsLoaded && styles.stampFont, { color: s.stampColor, textAlign: 'center' }]}>
+              {formatDateStamp(now, s.dateFormat)}
+            </Text>
+            <OptionChips
+              options={DATE_STAMP_POSITIONS.map((p) => ({ value: p.id, label: p.label }))}
+              value={s.stampPosition}
+              onChange={(v) => s.set('stampPosition', v)}
+              accessibilityLabel="날짜 위치"
+            />
+            <ColorSwatches colors={DATE_STAMP_COLORS.map((c) => c.color)} value={s.stampColor} onChange={(v) => s.set('stampColor', v)} accessibilityLabel="날짜 색" />
+            <SliderControl value={s.stampSize} min={50} max={200} onChange={(v) => s.set('stampSize', v)} resetValue={100} accessibilityLabel="날짜 크기" />
+          </View>
+        }
       />
       <OptionSheet
         visible={sheet === 'intensity'}

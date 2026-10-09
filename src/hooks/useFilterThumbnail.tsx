@@ -4,7 +4,7 @@ import { PixelRatio } from 'react-native';
 
 import { LumiLayer } from '@/render/LumiLayer';
 import { renderOffscreen } from '@/render/offscreen';
-import { lookRender, type Look } from '@/services/imageProcessing';
+import { lookRender, type ShaderLook as Look } from '@/services/imageProcessing';
 
 /**
  * Filter thumbnails are rendered once, offscreen, and shown as plain images.
@@ -21,10 +21,10 @@ function render(image: SkImage, look: Look, width: number, height: number): Prom
   const scale = Math.min(3, PixelRatio.get());
   const w = Math.round(width * scale);
   const h = Math.round(height * scale);
-  const { uniforms, curves } = lookRender(look, w, h);
+  const { uniforms, curves, mixCurves } = lookRender(look, w, h);
   const job = queue.then(async () => {
     const out = await renderOffscreen(
-      <LumiLayer image={image} width={w} height={h} fit="cover" uniforms={uniforms} curves={curves} />,
+      <LumiLayer image={image} width={w} height={h} fit="cover" uniforms={uniforms} curves={curves} mixCurves={mixCurves} />,
       w,
       h,
     );

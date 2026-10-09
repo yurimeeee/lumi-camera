@@ -5,7 +5,8 @@ import { prepareOriginal, renderEdit } from '@/services/exportImage';
 import { feedback } from '@/services/feedback';
 import { LUMI_ALBUM, LUMI_ORIGINALS_ALBUM, saveToLibrary } from '@/services/mediaLibrary';
 import { useCameraStore } from '@/stores/cameraStore';
-import { useEditorStore } from '@/stores/editorStore';
+import { lookOf, useEditorStore } from '@/stores/editorStore';
+import { useLastLookStore } from '@/stores/lastLookStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { showToast } from '@/stores/toastStore';
 import { permissionDenied } from '@/utils/dialogs';
@@ -31,7 +32,6 @@ export function useSaveEdit(typeface: SkTypeface | null) {
         highQuality: settings.highQuality,
         format: settings.exportFormat,
         quality: settings.jpegQuality,
-        dateFormat: settings.dateFormat,
         stampTypeface: typeface,
         location: source.location,
       });
@@ -48,6 +48,7 @@ export function useSaveEdit(typeface: SkTypeface | null) {
         await saveToLibrary(original, LUMI_ORIGINALS_ALBUM);
       }
       useCameraStore.getState().setLastPhoto(out.uri);
+      useLastLookStore.getState().set(lookOf(present));
       feedback.success();
       showToast('사진에 저장했어요');
       return true;

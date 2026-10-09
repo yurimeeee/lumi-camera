@@ -2,11 +2,13 @@ import { create } from 'zustand';
 
 import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { completeFaceRetouch, DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
+import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE, NO_FRAME } from '@/constants/film';
 import { aspectRatioOf } from '@/constants/crop';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
 import { DEFAULT_CURVES } from '@/services/color/curves';
 import { DEFAULT_HSL } from '@/services/color/hsl';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
+import type { DateStampStyle, FilmEffects, FilterMix, FrameSettings } from '@/types/film';
 import type {
   AdjustmentKey,
   Adjustments,
@@ -56,7 +58,12 @@ export function createEditState(partial?: Partial<EditState>): EditState {
     spots: [],
     faces: {},
     faceAnchors: {},
+    mix: null,
+    film: DEFAULT_FILM,
+    frame: NO_FRAME,
     dateStamp: false,
+    stamp: DEFAULT_STAMP_STYLE,
+    stampDate: null,
     ...partial,
     // Fields added in later versions (restored projects) get their defaults.
     ...(partial?.retouch ? { retouch: { ...DEFAULT_RETOUCH, ...partial.retouch } } : null),
@@ -64,20 +71,41 @@ export function createEditState(partial?: Partial<EditState>): EditState {
       ? { faces: Object.fromEntries(Object.entries(partial.faces).map(([id, r]) => [id, completeFaceRetouch(r)])) }
       : null),
     ...(partial?.faceAnchors ? null : { faceAnchors: {} }),
+    ...(partial?.film ? { film: completeFilm(partial.film) } : null),
+    ...(partial?.frame ? { frame: { ...NO_FRAME, ...partial.frame } } : null),
+    ...(partial?.stamp ? { stamp: { ...DEFAULT_STAMP_STYLE, ...partial.stamp } } : null),
   } as EditState;
 }
 
-/** The colour part of an edit — what a My Recipe stores. */
+/** The colour part of an edit. */
 export interface ColorLook {
   filterId: string;
   intensity: number;
+  /** Filter B (applied after A); absent = no mix. */
+  mix?: FilterMix | null;
   adjustments: Adjustments;
   hsl: HslSettings;
   curves: CurveSettings;
 }
 
+/**
+ * Everything a My Recipe or a camera look carries: colour, film effects,
+ * frame and the date stamp's style (never the date itself, the crop, face
+ * edits or anything else that belongs to one photo).
+ */
+export interface Look extends ColorLook {
+  film: FilmEffects;
+  frame: FrameSettings;
+  dateStamp: boolean;
+  stamp: DateStampStyle;
+}
+
 export function colorLookOf(s: EditState): ColorLook {
-  return { filterId: s.filterId, intensity: s.intensity, adjustments: s.adjustments, hsl: s.hsl, curves: s.curves };
+  return { filterId: s.filterId, intensity: s.intensity, mix: s.mix, adjustments: s.adjustments, hsl: s.hsl, curves: s.curves };
+}
+
+export function lookOf(s: EditState): Look {
+  return { ...colorLookOf(s), film: s.film, frame: s.frame, dateStamp: s.dateStamp, stamp: s.stamp };
 }
 
 interface EditorState {
@@ -124,11 +152,23 @@ interface EditorActions {
   /** Discrete updates — committed immediately. */
   setFilter: (id: string) => void;
   /**
-   * Applies a look (My Recipe) as one undo step: filter, intensity and every
-   * colour value are replaced by copies of the recipe's. Retouch, geometry
-   * and touch edits are photo-specific and stay as they are.
+   * Applies a look (My Recipe) as one undo step: filter, mix, every colour
+   * value and — when the look has them — film effects, frame and date stamp
+   * style are replaced by copies of the recipe's. Retouch, geometry, touch
+   * edits and the stamp's date are photo-specific and stay as they are.
    */
-  applyLook: (look: ColorLook, recipeId: string | null) => void;
+  applyLook: (look: ColorLook | Look, recipeId: string | null) => void;
+  /** Filter B of a mix (null removes it). One undo step. */
+  setMix: (mix: FilterMix | null) => void;
+  /** Filter B strength (live; `commit()` on release). */
+  setMixIntensity: (value: number) => void;
+  /** Film effects (live while dragging; `commit()` on release). */
+  setFilm: (update: (f: FilmEffects) => FilmEffects) => void;
+  /** Frame (live; `commit()` on release — style changes commit themselves). */
+  setFrame: (update: (f: FrameSettings) => FrameSettings) => void;
+  setStamp: (update: (s: DateStampStyle) => DateStampStyle) => void;
+  /** Date for the stamp when the capture date is unknown. One undo step. */
+  setStampDate: (ms: number | null) => void;
   resetHslColor: (color: HslColor) => void;
   resetHsl: () => void;
   resetCurve: (channel: CurveChannel) => void;
@@ -240,10 +280,26 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
         filterId: look.filterId,
         intensity: look.intensity,
         recipeId,
+        mix: look.mix ? { ...look.mix } : null,
         adjustments: { ...DEFAULT_ADJUSTMENTS, ...look.adjustments },
         hsl: { ...DEFAULT_HSL, ...look.hsl },
         curves: { ...DEFAULT_CURVES, ...look.curves },
+        ...('film' in look
+          ? {
+              film: completeFilm(look.film),
+              frame: { ...NO_FRAME, ...look.frame },
+              dateStamp: look.dateStamp,
+              stamp: { ...DEFAULT_STAMP_STYLE, ...look.stamp },
+            }
+          : null),
       })),
+    setMix: (mix) => update((s) => ({ ...s, mix, recipeId: null })),
+    setMixIntensity: (value) =>
+      set((s) => (s.present.mix ? { present: { ...s.present, mix: { ...s.present.mix, intensity: value } } } : s)),
+    setFilm: (fn) => set((s) => ({ present: { ...s.present, film: fn(s.present.film) } })),
+    setFrame: (fn) => set((s) => ({ present: { ...s.present, frame: fn(s.present.frame) } })),
+    setStamp: (fn) => set((s) => ({ present: { ...s.present, stamp: fn(s.present.stamp) } })),
+    setStampDate: (stampDate) => update((s) => ({ ...s, stampDate })),
     resetHslColor: (color) => {
       const a = get().present.hsl[color];
       if (a.hue === 0 && a.saturation === 0 && a.luminance === 0) return;

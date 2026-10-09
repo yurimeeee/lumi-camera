@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { PressableScale } from '@/components/common/PressableScale';
 import { colors, radius, typography } from '@/constants/theme';
 import { useLookThumbnail } from '@/hooks/useFilterThumbnail';
-import type { Look } from '@/services/imageProcessing';
+import type { ShaderLook as Look } from '@/services/imageProcessing';
 import type { FilterDefinition } from '@/types/filters';
 
 interface BaseProps {

@@ -21,8 +21,8 @@ import { composeHsl, DEFAULT_HSL, HSL_COLORS, hslWeights } from '@/services/colo
 import { parseProject, serializeProject, type EditProject } from '@/services/editProject';
 import { encodeExport } from '@/services/exportEncoding';
 import { isIdentity, resolveProcessing } from '@/services/imageProcessing';
-import { colorLookOf, createEditState, useEditorStore } from '@/stores/editorStore';
-import { normalizeRecipeName, recipeToColorLook, scaleColorLook, useRecipeStore } from '@/stores/recipeStore';
+import { colorLookOf, createEditState, lookOf, useEditorStore } from '@/stores/editorStore';
+import { normalizeRecipeName, recipeToLook, scaleColorLook, useRecipeStore } from '@/stores/recipeStore';
 import type { SourceImage } from '@/types/editing';
 
 import { asyncStorageMemory } from './stubs';
@@ -208,12 +208,12 @@ describe('My Recipe', () => {
     s.setRetouch('skin', 40); // photo-specific: not part of a recipe
     s.commit();
     const look = colorLookOf(useEditorStore.getState().present);
-    const id = useRecipeStore.getState().add('  Warm   Diary ', look);
+    const id = useRecipeStore.getState().add('  Warm   Diary ', lookOf(useEditorStore.getState().present));
     const recipe = useRecipeStore.getState().recipes.find((r) => r.id === id)!;
     expect(recipe.name).toBe('Warm Diary');
 
     useEditorStore.getState().open({ ...SOURCE, uri: 'file:///other.jpg' });
-    useEditorStore.getState().applyLook(recipeToColorLook(recipe), recipe.id);
+    useEditorStore.getState().applyLook(recipeToLook(recipe), recipe.id);
     const next = useEditorStore.getState().present;
     expect(colorLookOf(next)).toEqual(look);
     expect(next.retouch.skin).toBe(0);
@@ -224,15 +224,15 @@ describe('My Recipe', () => {
     const s = useEditorStore.getState();
     s.setAdjustment('contrast', 30);
     s.commit();
-    const id = useRecipeStore.getState().add('Soft Peach', colorLookOf(useEditorStore.getState().present));
+    const id = useRecipeStore.getState().add('Soft Peach', lookOf(useEditorStore.getState().present));
     useEditorStore.getState().open(SOURCE);
-    useEditorStore.getState().applyLook(recipeToColorLook(useRecipeStore.getState().recipes[0]!), id);
+    useEditorStore.getState().applyLook(recipeToLook(useRecipeStore.getState().recipes[0]!), id);
     useRecipeStore.getState().remove(id);
     expect(useEditorStore.getState().present.adjustments.contrast).toBe(30);
   });
 
   test('rename, favourite, persistence', async () => {
-    const id = useRecipeStore.getState().add('Summer Mood', colorLookOf(createEditState()));
+    const id = useRecipeStore.getState().add('Summer Mood', lookOf(createEditState()));
     useRecipeStore.getState().rename(id, 'Summer');
     useRecipeStore.getState().rename(id, '   ');
     useRecipeStore.getState().toggleFavorite(id);

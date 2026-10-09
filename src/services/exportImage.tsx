@@ -1,14 +1,16 @@
-import { Group, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
+import { Group, rect, rrect, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { getFilter } from '@/constants/filters';
 import { DateStampLayer } from '@/render/DateStampLayer';
+import { FrameLayer } from '@/render/FrameLayer';
+import { frameLayout } from '@/render/frameLayout';
 import { LumiLayer } from '@/render/LumiLayer';
 import { renderOffscreen } from '@/render/offscreen';
 import type { EditState, SourceImage } from '@/types/editing';
-import type { DateFormat, ExportFormat, JpegQuality } from '@/types/settings';
-import { formatDateStamp } from '@/utils/dateStamp';
+import type { ExportFormat, JpegQuality } from '@/types/settings';
+import { formatDateStamp, stampDateOf } from '@/utils/dateStamp';
 
 import { withExif } from './exif';
 import { encodeExport } from './exportEncoding';
@@ -26,7 +28,6 @@ export interface ExportOptions {
   format: ExportFormat;
   /** JPEG only. */
   quality: JpegQuality;
-  dateFormat: DateFormat;
   stampTypeface: SkTypeface | null;
   location?: GeoPoint | null;
 }
@@ -57,8 +58,10 @@ function writeImage(bytes: Uint8Array, prefix: string, format: ExportFormat = 'j
 
 /**
  * Renders the final edited photo at export resolution:
- * geometry (native) → Lumi shader (face warp → skin → colour → filter →
- * effects) + date stamp (Skia, offscreen) → JPEG + EXIF.
+ * geometry (native) → Lumi shader (face warp → skin → colour → filter / mix
+ * → film effects) + date stamp + frame (Skia, offscreen) → JPEG/PNG + EXIF.
+ * The photo keeps its own resolution and aspect; a frame adds its border
+ * around it.
  */
 export async function renderEdit(source: SourceImage, edit: EditState, opts: ExportOptions): Promise<ImageFile> {
   const maxSide = opts.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD;
@@ -71,10 +74,12 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const processing = resolveProcessing({
     filter: getFilter(edit.filterId),
     intensity: edit.intensity,
+    mix: edit.mix,
     adjustments: edit.adjustments,
     retouch: edit.retouch,
     hsl: edit.hsl,
     curves: edit.curves,
+    film: edit.film,
   });
   // Face retouch: the same source landmarks the preview used (cached per
   // image, matched to the edit's faces by anchor), mapped through this
@@ -97,25 +102,42 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
           spotUniforms(edit.spots, edit.geometry, source, width, height),
           face.regions,
         );
-  const stamp =
-    edit.dateStamp && opts.stampTypeface ? formatDateStamp(source.takenAt, opts.dateFormat) : null;
+  const date = stampDateOf(source, edit);
+  const stamp = edit.dateStamp && opts.stampTypeface && date !== null ? formatDateStamp(date, edit.stamp.format) : null;
+  const layout = frameLayout(edit.frame, width, height);
+  const { photo } = layout;
 
   const rendered = await renderOffscreen(
     <Group>
-      <LumiLayer
-        image={image}
-        width={width}
-        height={height}
-        uniforms={uniforms}
-        reshape={reshape}
-        curves={processing.curves}
-      />
-      {stamp && opts.stampTypeface ? (
-        <DateStampLayer text={stamp} typeface={opts.stampTypeface} width={width} height={height} />
-      ) : null}
+      <FrameLayer frame={edit.frame} layout={layout} />
+      <Group
+        transform={[{ translateX: photo.x }, { translateY: photo.y }]}
+        clip={layout.radius > 0 ? rrect(rect(0, 0, width, height), layout.radius, layout.radius) : undefined}
+      >
+        <LumiLayer
+          image={image}
+          width={width}
+          height={height}
+          uniforms={uniforms}
+          reshape={reshape}
+          curves={processing.curves}
+          mixCurves={processing.mix?.curves ?? null}
+        />
+        {stamp && opts.stampTypeface ? (
+          <DateStampLayer
+            text={stamp}
+            typeface={opts.stampTypeface}
+            width={width}
+            height={height}
+            position={edit.stamp.position}
+            color={edit.stamp.color}
+            size={edit.stamp.size}
+          />
+        ) : null}
+      </Group>
     </Group>,
-    width,
-    height,
+    layout.width,
+    layout.height,
   );
   reshape?.x.dispose();
   reshape?.y.dispose();
@@ -125,7 +147,7 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const bytes = encodeExport(raster, opts.format, opts.quality);
   // EXIF (date, optional GPS) is written for JPEG; PNG carries no EXIF here.
   const out = opts.format === 'jpeg' ? withExif(bytes, { takenAt: source.takenAt, location: opts.location }) : bytes;
-  return { uri: writeImage(out, 'lumi', opts.format), width, height };
+  return { uri: writeImage(out, 'lumi', opts.format), width: layout.width, height: layout.height };
 }
 
 

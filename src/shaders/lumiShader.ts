@@ -3,6 +3,7 @@ import { Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
 import { MAX_SPOTS } from '@/services/blemish';
 import { HSL_CENTERS, HSL_MAX_HUE_SHIFT } from '@/services/color/hsl';
 import { REGION_SKSL } from '@/services/faceWarp/regions';
+import { FILM_SKSL } from '@/services/film/shader';
 import { FACE_WARP_SKSL } from '@/services/faceWarp/shader';
 import { RESHAPE_RANGE } from '@/services/reshape';
 
@@ -10,12 +11,14 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * Lumi's single-pass image pipeline, written in SkSL.
  *
  * Order of operations:
- *   face warp → retouch (skin-tone masked, face features protected) →
- *   face region tools (dark circle, wrinkle, redness, teeth, eyes) →
- *   local detail → exposure/brightness →
- *   white balance → highlights/shadows → contrast → saturation/vibrance →
- *   HSL (per colour) → split tone → tone curves (LUT) → glow → fade →
- *   vignette → grain
+ *   face warp → lens fringing → retouch (skin-tone masked, face features
+ *   protected) → face region tools (dark circle, wrinkle, redness, teeth,
+ *   eyes) → local detail → flash →
+ *   look A: exposure/brightness → white balance → highlights/shadows →
+ *     contrast → saturation/vibrance → HSL → split tone → curves (LUT row 0)
+ *   look B (filter mix, same stage with its own values, LUT row 1) →
+ *   colour drift → glow → bloom / halation / soft focus → fade → grain →
+ *   dust / scratches → light leak → film burn → vignette
  *
  * All radii are expressed in "uPixel" units (1/1000 of the image's short side)
  * so the on-screen preview and the full-resolution export look the same.
@@ -48,6 +51,23 @@ const BANDS = [
   [6, C.purple, C.blue, C.magenta],
   [7, C.magenta, C.purple, C.red + 360],
 ] as const;
+
+/** HSL for one look stage, reading the band shifts from `arr` (uHsl / uHsl2). */
+function applyHsl(name: string, arr: string): string {
+  return `float3 ${name}(float3 c) {
+  float chroma = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+  float gate = smoothstep(0.02, 0.18, chroma);
+  if (gate <= 0.0) return c;
+  float3 hsl = rgb2hsl(c);
+  float3 adj = float3(0.0);
+${BANDS.map(([i, ce, pr, nx]) => `  adj += ${arr}[${i}] * bandWeight(hsl.x, ${deg(ce)}, ${deg(pr)}, ${deg(nx)});`).join('\n')}
+  adj *= gate;
+  float s = clamp(hsl.y * (1.0 + adj.y), 0.0, 1.0);
+  float3 o = hsl2rgb(float3(fract(hsl.x + adj.x * ${deg(HSL_MAX_HUE_SHIFT)}), s, hsl.z));
+  float a = adj.z * 0.35;
+  return a > 0.0 ? o + (1.0 - o) * a : o * (1.0 + a);
+}`;
+}
 
 /**
  * HSL per colour band, mirrored on the CPU by applyHslCpu (tests). Weights
@@ -82,36 +102,26 @@ float bandWeight(float h, float ce, float pr, float nx) {
   return d < 0.0 ? 1.0 - smoothstep(0.0, ce - pr, -d) : 1.0 - smoothstep(0.0, nx - ce, d);
 }
 
-float3 applyHsl(float3 c) {
-  float chroma = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-  float gate = smoothstep(0.02, 0.18, chroma);
-  if (gate <= 0.0) return c;
-  float3 hsl = rgb2hsl(c);
-  float3 adj = float3(0.0);
-${BANDS.map(([i, ce, pr, nx]) => `  adj += uHsl[${i}] * bandWeight(hsl.x, ${deg(ce)}, ${deg(pr)}, ${deg(nx)});`).join('\n')}
-  adj *= gate;
-  float s = clamp(hsl.y * (1.0 + adj.y), 0.0, 1.0);
-  float3 o = hsl2rgb(float3(fract(hsl.x + adj.x * ${deg(HSL_MAX_HUE_SHIFT)}), s, hsl.z));
-  float a = adj.z * 0.35;
-  return a > 0.0 ? o + (1.0 - o) * a : o * (1.0 + a);
-}
+${applyHsl('applyHslA', 'uHsl')}
+${applyHsl('applyHslB', 'uHsl2')}
 
 // Linear interpolation between the LUT's byte entries (texel centres are
-// exact, whatever sampling the child shader uses).
-float curveAt(float v, int ch) {
+// exact, whatever sampling the child shader uses). Row 0 = look A, row 1 =
+// look B (filter mix).
+float curveAt(float v, int ch, float row) {
   float x = clamp(v, 0.0, 1.0) * 255.0;
   float i0 = floor(x);
   float i1 = min(i0 + 1.0, 255.0);
-  half4 a = curveLut.eval(float2(i0 + 0.5, 0.5));
-  half4 b = curveLut.eval(float2(i1 + 0.5, 0.5));
+  half4 a = curveLut.eval(float2(i0 + 0.5, row + 0.5));
+  half4 b = curveLut.eval(float2(i1 + 0.5, row + 0.5));
   float f = x - i0;
   if (ch == 0) return mix(float(a.r), float(b.r), f);
   if (ch == 1) return mix(float(a.g), float(b.g), f);
   return mix(float(a.b), float(b.b), f);
 }
 
-float3 applyCurves(float3 c) {
-  return float3(curveAt(c.r, 0), curveAt(c.g, 1), curveAt(c.b, 2));
+float3 applyCurves(float3 c, float row) {
+  return float3(curveAt(c.r, 0, row), curveAt(c.g, 1, row), curveAt(c.b, 2, row));
 }
 `;
 
@@ -120,8 +130,10 @@ uniform shader image;
 // 터치 보정 displacement, x and y: R = high byte, G = low byte of 0…1.
 uniform shader dispX;
 uniform shader dispY;
-// Tone curves: 256×1 RGB lookup (services/color/curves.ts).
+// Tone curves: 256×2 RGB lookup, row 0 look A, row 1 look B (services/color/curves.ts).
 uniform shader curveLut;
+// The photo at low resolution (bloom, halation, soft focus).
+uniform shader lowRes;
 uniform float uCurvesOn;
 uniform float uReshape;
 uniform float2 uResolution;
@@ -142,7 +154,6 @@ uniform float uDefinition;
 uniform float uFade;
 uniform float uVignette;
 uniform float uGrain;
-uniform float uGrainSeed;
 
 uniform float uSkin;
 uniform float uSmooth;
@@ -162,6 +173,15 @@ uniform float uSplit;
 // HSL: per band (hue, saturation, luminance) in -1…1; see services/color/hsl.ts.
 uniform float3 uHsl[8];
 uniform float uHslOn;
+
+// Look B (filter mix): (exposure, brightness, contrast, highlights),
+// (shadows, saturation, vibrance, warmth), (temperature, tint, split, hslOn),
+// (curvesOn, —, —, —); split tints; HSL bands.
+uniform float uMixOn;
+uniform float4 uMix[4];
+uniform float3 uMixShadow;
+uniform float3 uMixHighlight;
+uniform float3 uHsl2[8];
 
 const float3 LUMA = float3(0.2126, 0.7152, 0.0722);
 
@@ -212,6 +232,43 @@ float3 ringBlur(float2 xy, float radius) {
 ${HSL_SKSL}
 ${FACE_WARP_SKSL}
 ${REGION_SKSL}
+${FILM_SKSL}
+
+// One look: light → white balance → tone → colour → HSL → split → curves.
+// Look A (filter + adjustments) and look B (the mixed-in filter) both run it.
+float3 lookStage(float3 c, float4 p0, float4 p1, float4 p2, float3 shT, float3 hiT, float curvesOn, float stage) {
+  c *= exp2(p0.x);
+  c = pow(max(c, float3(0.0)), float3(exp2(-p0.y * 0.7)));
+
+  c *= float3(1.0 + p2.x * 0.10 + p2.y * 0.02,
+              1.0 + p2.x * 0.02 - p2.y * 0.07,
+              1.0 - p2.x * 0.12 + p2.y * 0.02);
+  float l = luma(c);
+  c += float3(0.06, 0.02, -0.06) * p1.w * clamp(4.0 * l * (1.0 - l), 0.0, 1.0);
+
+  l = luma(c);
+  float sh = 1.0 - smoothstep(0.0, 0.55, l);
+  float hl = smoothstep(0.45, 1.0, l);
+  c += p1.x * 0.28 * sh + p0.w * 0.28 * hl;
+  c = (c - 0.5) * (1.0 + p0.z * 0.6) + 0.5;
+
+  l = luma(c);
+  c = mix(float3(l), c, 1.0 + p1.y);
+  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+  l = luma(c);
+  c = mix(float3(l), c, 1.0 + p1.z * (1.0 - smoothstep(0.0, 0.6, sat)));
+
+  if (p2.w > 0.5) c = stage < 0.5 ? applyHslA(clamp(c, 0.0, 1.0)) : applyHslB(clamp(c, 0.0, 1.0));
+
+  if (p2.z > 0.0) {
+    l = clamp(luma(c), 0.0, 1.0);
+    c += (shT - 0.5) * (1.0 - l) * p2.z * 0.5;
+    c += (hiT - 0.5) * l * p2.z * 0.5;
+  }
+
+  if (curvesOn > 0.5) c = applyCurves(c, stage);
+  return c;
+}
 float decode16(half4 c) {
   return (float(c.r) * 65280.0 + float(c.g) * 255.0) / 65535.0;
 }
@@ -305,6 +362,8 @@ float3 heal(float2 p, float3 c) {
 half4 main(float2 pos) {
   float2 xy = faceWarp(uReshape > 0.5 ? reshape(pos) : pos);
   float3 src = image.eval(xy).rgb;
+  float filmOn = uFilm[6].y;
+  if (filmOn > 0.5 && uFilm[2].w > 0.0) src = filmFringe(xy, src);
   if (uSpotCount > 0.0) src = heal(xy, src);
   float3 c = src;
   float px = uPixel;
@@ -350,40 +409,16 @@ half4 main(float2 pos) {
     }
   }
 
-  // ── Light ──────────────────────────────────────────────────
-  c *= exp2(uExposure);
-  c = pow(max(c, float3(0.0)), float3(exp2(-uBrightness * 0.7)));
+  float2 uv = pos / uResolution;
+  float2 aspect = uResolution / min(uResolution.x, uResolution.y);
+  if (filmOn > 0.5 && uFilm[5].w > 0.0) c = filmFlash(uv, aspect, c);
 
-  // ── White balance ──────────────────────────────────────────
-  c *= float3(1.0 + uTemperature * 0.10 + uTint * 0.02,
-              1.0 + uTemperature * 0.02 - uTint * 0.07,
-              1.0 - uTemperature * 0.12 + uTint * 0.02);
-  float l = luma(c);
-  c += float3(0.06, 0.02, -0.06) * uWarmth * clamp(4.0 * l * (1.0 - l), 0.0, 1.0);
-
-  // ── Tone ───────────────────────────────────────────────────
-  l = luma(c);
-  float sh = 1.0 - smoothstep(0.0, 0.55, l);
-  float hl = smoothstep(0.45, 1.0, l);
-  c += uShadows * 0.28 * sh + uHighlights * 0.28 * hl;
-  c = (c - 0.5) * (1.0 + uContrast * 0.6) + 0.5;
-
-  // ── Colour ─────────────────────────────────────────────────
-  l = luma(c);
-  c = mix(float3(l), c, 1.0 + uSaturation);
-  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
-  l = luma(c);
-  c = mix(float3(l), c, 1.0 + uVibrance * (1.0 - smoothstep(0.0, 0.6, sat)));
-
-  if (uHslOn > 0.5) c = applyHsl(clamp(c, 0.0, 1.0));
-
-  if (uSplit > 0.0) {
-    l = clamp(luma(c), 0.0, 1.0);
-    c += (uShadowTint - 0.5) * (1.0 - l) * uSplit * 0.5;
-    c += (uHighlightTint - 0.5) * l * uSplit * 0.5;
-  }
-
-  if (uCurvesOn > 0.5) c = applyCurves(c);
+  // ── Look A: filter + adjustments ───────────────────────────
+  c = lookStage(c, float4(uExposure, uBrightness, uContrast, uHighlights), float4(uShadows, uSaturation, uVibrance, uWarmth),
+                float4(uTemperature, uTint, uSplit, uHslOn), uShadowTint, uHighlightTint, uCurvesOn, 0.0);
+  // ── Look B: filter mix ─────────────────────────────────────
+  if (uMixOn > 0.5) c = lookStage(c, uMix[0], uMix[1], uMix[2], uMixShadow, uMixHighlight, uMix[3].x, 1.0);
+  if (filmOn > 0.5 && uFilm[6].x > 0.0) c = filmDrift(uv, c);
 
   // ── Effects ────────────────────────────────────────────────
   if (uGlow > 0.0) {
@@ -391,11 +426,19 @@ half4 main(float2 pos) {
     float3 bloom = clamp(broadBlur * g * uGlow * 0.9, 0.0, 1.0);
     c = 1.0 - (1.0 - clamp(c, 0.0, 1.0)) * (1.0 - bloom);
   }
+  if (filmOn > 0.5) c = filmLight(xy, c);
 
   if (uFade > 0.0) {
-    l = luma(c);
+    float l = luma(c);
     c = mix(float3(l), c, 1.0 - uFade * 0.15);
     c = c * (1.0 - uFade * 0.22) + uFade * 0.11;
+  }
+
+  if (uGrain > 0.0) c = filmGrain(pos, c, uGrain);
+  if (filmOn > 0.5) {
+    c = filmMarks(pos, uv, c);
+    if (uFilm[3].x > 0.0) c = filmLeak(uv, aspect, c);
+    if (uFilm[4].y > 0.0) c = filmBurn(uv, aspect, c);
   }
 
   if (uVignette != 0.0) {
@@ -407,13 +450,6 @@ half4 main(float2 pos) {
     } else {
       c += v * (-uVignette) * 0.35 * (1.0 - c);
     }
-  }
-
-  if (uGrain > 0.0) {
-    float2 cell = floor(pos / max(px * 1.1, 0.35));
-    float n = hash12(cell + uGrainSeed) + hash12(cell * 1.37 + uGrainSeed + 17.0) - 1.0;
-    l = clamp(luma(c), 0.0, 1.0);
-    c += n * uGrain * 0.16 * (0.4 + 2.4 * l * (1.0 - l));
   }
 
   return half4(half3(clamp(c, 0.0, 1.0)), 1.0);

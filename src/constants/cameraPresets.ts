@@ -1,0 +1,70 @@
+import type { CameraPreset } from '@/types/presets';
+
+import { completeFilm, DEFAULT_FILM, DEFAULT_STAMP_STYLE } from './film';
+
+/** Ready-made camera presets (users add their own from the camera). */
+export const BUILTIN_PRESETS: readonly CameraPreset[] = [
+  {
+    id: 'daily-warm',
+    name: 'Daily Warm',
+    builtIn: true,
+    mode: 'photo',
+    filmCameraId: null,
+    lookId: 'mellow',
+    intensity: 70,
+    film: completeFilm({ ...DEFAULT_FILM, bloom: { intensity: 10, threshold: 70, radius: 50 } }),
+    grain: 10,
+    dateStamp: false,
+    stamp: DEFAULT_STAMP_STYLE,
+    ratio: '4:3',
+  },
+  {
+    id: 'summer-film',
+    name: 'Summer Film',
+    builtIn: true,
+    mode: 'film',
+    filmCameraId: 'classic35',
+    lookId: 'stock-classic35',
+    intensity: 100,
+    // Classic 35's own effects plus a warm leak from the top-left.
+    film: completeFilm({
+      ...DEFAULT_FILM,
+      grain: { size: 35, roughness: 35, color: 0 },
+      halation: { intensity: 18, radius: 35, warmth: 40 },
+      leak: { style: 'warm', intensity: 30, position: 6, rotation: 20, scale: 55 },
+    }),
+    grain: null,
+    dateStamp: true,
+    stamp: DEFAULT_STAMP_STYLE,
+    ratio: '4:3',
+  },
+  {
+    id: 'night-flash',
+    name: 'Night Flash',
+    builtIn: true,
+    mode: 'film',
+    filmCameraId: 'retroFlash',
+    lookId: 'stock-retroflash',
+    intensity: 100,
+    film: null,
+    grain: null,
+    dateStamp: true,
+    stamp: DEFAULT_STAMP_STYLE,
+    ratio: '4:3',
+    flash: 'on',
+  },
+  {
+    id: 'soft-portrait',
+    name: 'Soft Portrait',
+    builtIn: true,
+    mode: 'photo',
+    filmCameraId: null,
+    lookId: 'portra',
+    intensity: 80,
+    film: completeFilm({ ...DEFAULT_FILM, bloom: { intensity: 15, threshold: 65, radius: 55 }, softFocus: 20 }),
+    grain: 8,
+    dateStamp: false,
+    stamp: DEFAULT_STAMP_STYLE,
+    ratio: '4:3',
+  },
+];

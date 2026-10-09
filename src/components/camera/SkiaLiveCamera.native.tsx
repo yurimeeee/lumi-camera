@@ -64,7 +64,7 @@ export function SkiaLiveCamera({
       return;
     }
     uniforms.set(flattenUniforms(effect, { ...buildUniforms(look, 1, 1), uReshape: 0 }));
-    lut.set(look.curves ? curveTexture(look.curves) : null);
+    lut.set(look.curves || look.mix?.curves ? curveTexture(look.curves, look.mix?.curves ?? null) : null);
   }, [look, effect, uniforms, lut]);
 
   const minEV = device?.supportsExposureBias ? device.minExposureBias : 0;
@@ -110,6 +110,9 @@ export function SkiaLiveCamera({
         neutral.x.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None),
         neutral.y.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None),
         lutImage.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None),
+        // Bloom/halation read a low-resolution copy; preview-sized frames are
+        // read directly (a few more samples, no extra pass per frame).
+        frameTexture.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None),
       ];
       const paint = Skia.Paint();
       paint.setShader(effect.makeShaderWithChildren(values, children));

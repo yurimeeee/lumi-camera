@@ -62,7 +62,7 @@ export function useCapture({ cameraRef, ready, ratio, look }: Options) {
     if (!camera || shooting.current) return;
     shooting.current = true;
     const settings = useSettingsStore.getState();
-    const { skin, setLastPhoto, facing } = useCameraStore.getState();
+    const { skin, setLastPhoto, facing, rerollSeed } = useCameraStore.getState();
     const current = lookRef.current;
 
     setBusy(true);
@@ -86,15 +86,26 @@ export function useCapture({ cameraRef, ready, ratio, look }: Options) {
       const uri = await storeOriginal(image.uri);
 
       setLastPhoto(uri);
+      const { look } = current;
       useEditorStore.getState().open(
-        { ...image, uri, origin: 'camera', takenAt, location },
+        { ...image, uri, origin: 'camera', takenAt, dateKnown: true, location },
         {
-          ...current.color,
+          filterId: look.filterId,
+          intensity: look.intensity,
+          mix: look.mix ?? null,
+          adjustments: look.adjustments,
+          hsl: look.hsl,
+          curves: look.curves,
+          // Same seed as the preview: the capture shows the grain/dust it showed.
+          film: look.film,
+          frame: look.frame,
+          dateStamp: look.dateStamp,
+          stamp: look.stamp,
           recipeId: current.recipeId,
           retouch: { ...DEFAULT_RETOUCH, skin },
-          dateStamp: settings.dateStamp,
         },
       );
+      rerollSeed();
       router.push('/editor');
       void pruneStoredOriginals([uri]);
     } catch (e) {

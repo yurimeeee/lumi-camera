@@ -2,7 +2,7 @@ import { ImageFormat, type SkImage } from '@shopify/react-native-skia';
 
 import { LumiLayer } from '@/render/LumiLayer';
 import { renderOffscreen } from '@/render/offscreen';
-import type { ColorLook } from '@/stores/editorStore';
+import type { Look } from '@/stores/editorStore';
 import { getRecipe, useRecipeStore } from '@/stores/recipeStore';
 
 import { deleteFileQuietly, writeRecipeThumbnail } from './appFiles';
@@ -11,10 +11,10 @@ import { lookRender } from './imageProcessing';
 const THUMB_W = 192;
 const THUMB_H = 240;
 
-async function renderThumbnail(image: SkImage, look: ColorLook): Promise<Uint8Array | null> {
-  const { uniforms, curves } = lookRender(look, THUMB_W, THUMB_H);
+async function renderThumbnail(image: SkImage, look: Look): Promise<Uint8Array | null> {
+  const { uniforms, curves, mixCurves } = lookRender(look, THUMB_W, THUMB_H);
   const out = await renderOffscreen(
-    <LumiLayer image={image} width={THUMB_W} height={THUMB_H} fit="cover" uniforms={uniforms} curves={curves} />,
+    <LumiLayer image={image} width={THUMB_W} height={THUMB_H} fit="cover" uniforms={uniforms} curves={curves} mixCurves={mixCurves} />,
     THUMB_W,
     THUMB_H,
   );
@@ -23,10 +23,10 @@ async function renderThumbnail(image: SkImage, look: ColorLook): Promise<Uint8Ar
 }
 
 /**
- * Saves the colour look as a My Recipe. The thumbnail (the look on the photo
+ * Saves the look (colour, film effects, frame, stamp style) as a My Recipe. The thumbnail (the look on the photo
  * it was made from) is best effort — a recipe without one still works.
  */
-export async function saveRecipe(name: string, look: ColorLook, image: SkImage | null): Promise<string> {
+export async function saveRecipe(name: string, look: Look, image: SkImage | null): Promise<string> {
   const id = useRecipeStore.getState().add(name, look);
   if (image) {
     try {

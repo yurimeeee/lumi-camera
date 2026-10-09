@@ -5,3 +5,4 @@ export type DateFormat = 'apostrophe' | 'dotted-full' | 'dotted-short' | 'us';
 export type CameraFacing = 'front' | 'back';
 export type ExportFormat = 'jpeg' | 'png';
 export type JpegQuality = 80 | 90 | 100;
+export type CameraMode = 'photo' | 'film';

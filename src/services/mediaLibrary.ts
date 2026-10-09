@@ -46,10 +46,24 @@ export async function fetchRecentPhotos(limit = 120, offset = 0): Promise<Librar
 }
 
 /** Resolves a library asset to a local file URI that image processing can read. */
-export async function resolvePhotoFile(id: string): Promise<{ uri: string; takenAt: number }> {
+export async function resolvePhotoFile(id: string): Promise<{ uri: string; takenAt: number | null }> {
   const asset = new MediaLibrary.Asset(id);
   const [uri, created] = await Promise.all([asset.getUri(), asset.getCreationTime()]);
-  return { uri, takenAt: created ?? Date.now() };
+  return { uri, takenAt: created ?? null };
+}
+
+/** EXIF "YYYY:MM:DD HH:MM:SS" (local time) → ms, or null. */
+export function parseExifDate(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const m = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(value);
+  if (!m) return null;
+  const d = new Date(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!, +m[6]!);
+  return Number.isFinite(d.getTime()) && d.getFullYear() > 1900 ? d.getTime() : null;
+}
+
+function toPicked(a: ImagePicker.ImagePickerAsset): PickedImage {
+  const exif = a.exif as Record<string, unknown> | null | undefined;
+  return { uri: a.uri, width: a.width, height: a.height, takenAt: parseExifDate(exif?.DateTimeOriginal ?? exif?.DateTime) };
 }
 
 /**
@@ -60,12 +74,26 @@ export async function pickImageFromSystem(): Promise<PickedImage | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     quality: 1,
-    exif: false,
+    // Only to read the capture date for the date stamp.
+    exif: true,
     allowsEditing: false,
   });
   if (result.canceled || !result.assets[0]) return null;
-  const a = result.assets[0];
-  return { uri: a.uri, width: a.width, height: a.height, takenAt: Date.now() };
+  return toPicked(result.assets[0]);
+}
+
+/** Several photos at once (일괄 보정), in the order picked. */
+export async function pickImagesFromSystem(limit: number): Promise<PickedImage[]> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 1,
+    exif: true,
+    allowsMultipleSelection: true,
+    selectionLimit: limit,
+    orderedSelection: true,
+  });
+  if (result.canceled) return [];
+  return result.assets.map(toPicked);
 }
 
 async function ensureWriteAccess(): Promise<boolean> {

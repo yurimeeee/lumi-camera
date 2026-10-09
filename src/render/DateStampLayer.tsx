@@ -1,11 +1,13 @@
 import { BlurMask, Group, Path, Skia, Text, type SkFont, type SkPath, type SkTypeface } from '@shopify/react-native-skia';
 import { memo, useMemo } from 'react';
 
-import { colors } from '@/constants/theme';
+import { DEFAULT_STAMP_STYLE } from '@/constants/film';
+import type { DateStampPosition } from '@/types/film';
 
 /**
- * Film-camera style date imprint (orange 7-segment digits with a faint glow),
- * bottom-right of the frame. DSEG7 has no apostrophe/slash glyphs, so those
+ * Film-camera style date imprint (7-segment digits with a faint glow, vintage
+ * orange by default) in a corner of the photo. Sizes are relative to the
+ * photo's short side, so preview and export match. DSEG7 has no apostrophe/slash glyphs, so those
  * separators are drawn as small slanted segments to match.
  */
 
@@ -18,9 +20,16 @@ interface StampLayout {
   glow: number;
 }
 
-export function layoutDateStamp(text: string, typeface: SkTypeface, width: number, height: number): StampLayout {
+export function layoutDateStamp(
+  text: string,
+  typeface: SkTypeface,
+  width: number,
+  height: number,
+  position: DateStampPosition = 'bottomRight',
+  sizePct = 100,
+): StampLayout {
   const short = Math.min(width, height);
-  const size = Math.max(10, short * 0.036);
+  const size = Math.max(6, short * 0.036 * (Math.min(200, Math.max(50, sizePct)) / 100));
   const font = Skia.Font(typeface, size);
   const margin = short * 0.055;
 
@@ -33,9 +42,11 @@ export function layoutDateStamp(text: string, typeface: SkTypeface, width: numbe
 
   const chars = [...text];
   const total = chars.reduce((sum, ch) => sum + advance(ch), 0);
-  const baseline = height - margin;
+  const top = position === 'topLeft' || position === 'topRight';
+  const left = position === 'bottomLeft' || position === 'topLeft';
+  const baseline = top ? margin + size : height - margin;
   const runs: Run[] = [];
-  let x = width - margin - total;
+  let x = left ? margin : width - margin - total;
   let buffer = '';
   let bufferX = x;
 
@@ -96,12 +107,27 @@ interface Props {
   typeface: SkTypeface;
   width: number;
   height: number;
+  position?: DateStampPosition;
+  color?: string;
+  /** 50…200 % of the default size. */
+  size?: number;
 }
 
-export const DateStampLayer = memo(function DateStampLayer({ text, typeface, width, height }: Props) {
-  const layout = useMemo(() => layoutDateStamp(text, typeface, width, height), [text, typeface, width, height]);
+export const DateStampLayer = memo(function DateStampLayer({
+  text,
+  typeface,
+  width,
+  height,
+  position = 'bottomRight',
+  color = DEFAULT_STAMP_STYLE.color,
+  size = 100,
+}: Props) {
+  const layout = useMemo(
+    () => layoutDateStamp(text, typeface, width, height, position, size),
+    [text, typeface, width, height, position, size],
+  );
   return (
-    <Group color={colors.dateStamp}>
+    <Group color={color}>
       <Group opacity={0.55}>
         <BlurMask blur={layout.glow} style="normal" />
         <Glyphs layout={layout} />

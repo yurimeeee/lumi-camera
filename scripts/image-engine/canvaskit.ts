@@ -4,7 +4,7 @@
  */
 import { join } from 'path';
 
-import { curveTableBytes } from '@/services/color/curves';
+import { curveLutBytes } from '@/services/color/curveTexture';
 import { buildUniforms, type ResolvedProcessing } from '@/services/imageProcessing';
 import { LUMI_SKSL } from '@/shaders/lumiShader';
 
@@ -51,11 +51,15 @@ export function renderLumi(src: Pixels, p: ResolvedProcessing, overrides: Record
   const img = image(src);
   // Neutral 16-bit displacement (0.5 → R = 128, G = 0).
   const neutral = CK.MakeImage({ width: 1, height: 1, ...INFO, alphaType: CK.AlphaType.Opaque }, new Uint8Array([128, 0, 0, 255]), 4);
-  const lutBytes = p.curves ? curveTableBytes(p.curves) : identityLutBytes();
-  const lut = CK.MakeImage({ width: 256, height: 1, ...INFO, alphaType: CK.AlphaType.Opaque }, lutBytes, 256 * 4);
+  const lutBytes = curveLutBytes(p.curves, p.mix?.curves ?? null);
+  const lut = CK.MakeImage({ width: 256, height: 2, ...INFO, alphaType: CK.AlphaType.Opaque }, lutBytes, 256 * 4);
+  const low = lowResPixels(src);
+  const lowImg = image(low);
+  // Same mapping as the app: the small copy is stretched over the frame.
+  const lowShader = lowImg.makeShaderCubic(CK.TileMode.Clamp, CK.TileMode.Clamp, 1 / 3, 1 / 3, CK.Matrix.scaled(W / low.width, H / low.height));
   const nearest = (i: { makeShaderOptions: (...a: unknown[]) => unknown }) =>
     i.makeShaderOptions(CK.TileMode.Clamp, CK.TileMode.Clamp, CK.FilterMode.Nearest, CK.MipmapMode.None);
-  const shader = effect.makeShaderWithChildren(flatten(values), [nearest(img), nearest(neutral), nearest(neutral), nearest(lut)]);
+  const shader = effect.makeShaderWithChildren(flatten(values), [nearest(img), nearest(neutral), nearest(neutral), nearest(lut), lowShader]);
   const surface = CK.MakeSurface(W, H);
   const paint = new CK.Paint();
   paint.setShader(shader);
@@ -66,13 +70,24 @@ export function renderLumi(src: Pixels, p: ResolvedProcessing, overrides: Record
   img.delete();
   neutral.delete();
   lut.delete();
+  lowImg.delete();
   return { width: W, height: H, data };
 }
 
-function identityLutBytes(): Uint8Array {
-  const b = new Uint8Array(256 * 4);
-  for (let i = 0; i < 256; i++) b.set([i, i, i, 255], i * 4);
-  return b;
+/** The app's lowResOf (render/lowRes.ts): long side 384, cubic downscale. */
+export function lowResPixels(p: Pixels): Pixels {
+  const s = 384 / Math.max(p.width, p.height);
+  if (s >= 1) return p;
+  const w = Math.max(1, Math.round(p.width * s));
+  const h = Math.max(1, Math.round(p.height * s));
+  const img = image(p);
+  const surface = CK.MakeSurface(w, h);
+  surface.getCanvas().drawImageRectCubic(img, CK.XYWHRect(0, 0, p.width, p.height), CK.XYWHRect(0, 0, w, h), 1 / 3, 1 / 3, null);
+  surface.flush();
+  const data = surface.makeImageSnapshot().readPixels(0, 0, { width: w, height: h, ...INFO }) as Uint8Array;
+  surface.delete();
+  img.delete();
+  return { width: w, height: h, data };
 }
 
 /** Box-downscales by an integer factor (export-resolution render → preview size). */

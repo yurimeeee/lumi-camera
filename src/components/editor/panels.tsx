@@ -1,7 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { SkImage } from '@shopify/react-native-skia';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { IconButton } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
@@ -10,21 +9,21 @@ import { SliderControl } from '@/components/common/SliderControl';
 import { TextPromptDialog } from '@/components/common/TextPromptDialog';
 import { FilterCarousel } from '@/components/filters/FilterCarousel';
 import { RecipeActionsSheet } from '@/components/recipes/RecipeActionsSheet';
-import { ADJUST_TOOLS, EFFECT_TOOLS } from '@/constants/adjustments';
+import { ADJUST_TOOLS } from '@/constants/adjustments';
 import { aspectRatioOf, CROP_ASPECTS } from '@/constants/crop';
 import { getFilter } from '@/constants/filters';
-import { colors, radius, spacing, typography, WEB_SWITCH } from '@/constants/theme';
+import { colors, radius, spacing, typography } from '@/constants/theme';
 import { feedback } from '@/services/feedback';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
 import { saveRecipe } from '@/services/recipes';
-import { colorLookOf, useEditorStore } from '@/stores/editorStore';
+import { lookOf, useEditorStore } from '@/stores/editorStore';
 import { useIsFavorite, useFilterStore } from '@/stores/filterStore';
 import {
   getRecipe,
   parseRecipeLookId,
   RECIPE_NAME_MAX,
   recipeLookId,
-  recipeToColorLook,
+  recipeToLook,
   useRecipe,
   useRecipeStore,
 } from '@/stores/recipeStore';
@@ -40,36 +39,98 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
   const intensity = useEditorStore((s) => s.present.intensity);
   const recipeId = useEditorStore((s) => s.present.recipeId);
   const recipe = useRecipe(recipeId);
-  const { setFilter, setIntensity, commit, applyLook } = useEditorStore.getState();
+  const mix = useEditorStore((s) => s.present.mix);
+  const { setFilter, setIntensity, commit, applyLook, setMix, setMixIntensity } = useEditorStore.getState();
+  /** Which filter the carousel and slider edit: A (base) or B (mixed in after A). */
+  const [slot, setSlot] = useState<'a' | 'b'>('a');
   const [tab, setTab] = useState<LookTab>('all');
   const [managing, setManaging] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   const filterFavorite = useIsFavorite(filterId);
   const filter = getFilter(filterId);
   const favorite = recipe ? recipe.favorite : filterFavorite;
-  const selectedId = recipe ? recipeLookId(recipe.id) : filterId;
+  const selectedA = recipe ? recipeLookId(recipe.id) : filterId;
+  const selectedId = slot === 'b' ? (mix?.filterId ?? 'original') : selectedA;
 
   const onSelect = useCallback(
     (id: string) => {
+      if (slot === 'b') {
+        setMix(id === 'original' ? null : { filterId: id, intensity: mix?.intensity ?? 50 });
+        return;
+      }
       const rid = parseRecipeLookId(id);
       const r = rid ? getRecipe(rid) : null;
-      if (r) applyLook(recipeToColorLook(r), r.id);
+      if (r) applyLook(recipeToLook(r), r.id);
       else setFilter(id);
     },
-    [applyLook, setFilter],
+    [applyLook, setFilter, setMix, slot, mix],
   );
 
   const saveAsRecipe = async (name: string) => {
     const { present } = useEditorStore.getState();
-    const id = await saveRecipe(name, colorLookOf(present), thumbImage);
+    const id = await saveRecipe(name, lookOf(present), thumbImage);
     // The photo now uses this recipe; highlight it without adding an undo step.
     useEditorStore.setState((s) => ({ present: { ...s.present, recipeId: id }, committed: { ...s.committed, recipeId: id } }));
     feedback.success();
     showToast(`‘${name}’ 레시피를 저장했어요`);
   };
 
+  const mixRow = (
+    <View style={styles.mixRow}>
+      <SlotChip
+        slot="A"
+        name={recipe ? recipe.name : filter.name}
+        value={intensity}
+        selected={slot === 'a'}
+        onPress={() => setSlot('a')}
+      />
+      <Text style={styles.mixPlus}>→</Text>
+      <SlotChip
+        slot="B"
+        name={mix ? getFilter(mix.filterId).name : '필터 혼합'}
+        value={mix ? mix.intensity : null}
+        selected={slot === 'b'}
+        onPress={() => setSlot('b')}
+        onRemove={mix ? () => setMix(null) : undefined}
+      />
+    </View>
+  );
+
+  if (slot === 'b') {
+    return (
+      <View>
+        {mixRow}
+        <View style={styles.intensityRow}>
+          {mix ? (
+            <>
+              <Text style={styles.filterName} numberOfLines={1}>
+                {getFilter(mix.filterId).name}
+              </Text>
+              <View style={styles.flex}>
+                <SliderControl value={mix.intensity} onChange={setMixIntensity} onComplete={commit} resetValue={50} accessibilityLabel="혼합 필터 강도" />
+              </View>
+            </>
+          ) : (
+            <Text style={[styles.hint, styles.flex]}>A 위에 순서대로 겹칠 필터 B를 골라 주세요</Text>
+          )}
+        </View>
+        <FilterCarousel
+          selectedId={selectedId}
+          onSelect={onSelect}
+          image={thumbImage}
+          tab={tab}
+          onTabChange={setTab}
+          thumbWidth={56}
+          thumbHeight={70}
+          showRecipes={false}
+        />
+      </View>
+    );
+  }
+
   return (
     <View>
+      {mixRow}
       {filterId !== 'original' || recipe ? (
         <View style={styles.intensityRow}>
           <Text style={styles.filterName} numberOfLines={1}>
@@ -80,7 +141,7 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
               value={intensity}
               onChange={setIntensity}
               onComplete={commit}
-              resetValue={recipe ? recipe.intensity : 80}
+              resetValue={recipe ? recipe.color.intensity : 80}
               accessibilityLabel="필터 강도"
             />
           </View>
@@ -130,7 +191,7 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
       <TextPromptDialog
         visible={naming}
         title="레시피로 저장"
-        message="필터·조정·HSL·커브 값을 저장해 다른 사진에도 쓸 수 있어요. 자르기와 얼굴 보정은 포함되지 않아요."
+        message="필터·혼합·조정·HSL·커브·필름 효과·프레임·날짜 스타일을 저장해 다른 사진에도 쓸 수 있어요. 자르기·얼굴 보정·촬영 날짜는 포함되지 않아요."
         initialValue={`My Recipe ${useRecipeStore.getState().recipes.length + 1}`}
         placeholder="예: Warm Diary"
         confirmText="저장"
@@ -142,41 +203,50 @@ export function FilterPanel({ thumbImage }: { thumbImage: SkImage | null }) {
   );
 }
 
+/** Filter slot of a mix: "A Mellow 80" / "B Film 35 40" (B is applied on A's result). */
+function SlotChip({
+  slot,
+  name,
+  value,
+  selected,
+  onPress,
+  onRemove,
+}: {
+  slot: 'A' | 'B';
+  name: string;
+  value: number | null;
+  selected: boolean;
+  onPress: () => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <PressableScale
+      onPress={() => {
+        feedback.selection();
+        onPress();
+      }}
+      style={[styles.slot, selected && styles.slotSelected]}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`필터 ${slot} ${name}${value !== null ? ` ${value}` : ''}`}
+    >
+      <Text style={[styles.slotTag, selected && styles.slotTagSelected]}>{slot}</Text>
+      <Text style={[styles.slotName, selected && styles.slotNameSelected]} numberOfLines={1}>
+        {name}
+        {value !== null ? ` ${value}` : ''}
+      </Text>
+      {onRemove ? (
+        <IconButton icon="close" size={14} color={selected ? colors.white : colors.textSecondary} accessibilityLabel="혼합 해제" onPress={onRemove} />
+      ) : null}
+    </PressableScale>
+  );
+}
+
 export function AdjustPanel() {
   const values = useEditorStore((s) => s.present.adjustments);
   const { setAdjustment, commit, resetAdjustment } = useEditorStore.getState();
   return (
     <ToolSliderPanel tools={ADJUST_TOOLS} values={values} onChange={setAdjustment} onCommit={commit} onReset={resetAdjustment} />
-  );
-}
-
-export function EffectsPanel() {
-  const values = useEditorStore((s) => s.present.adjustments);
-  const dateStamp = useEditorStore((s) => s.present.dateStamp);
-  const { setAdjustment, commit, resetAdjustment, setDateStamp } = useEditorStore.getState();
-  return (
-    <ToolSliderPanel
-      tools={EFFECT_TOOLS}
-      values={values}
-      onChange={setAdjustment}
-      onCommit={commit}
-      onReset={resetAdjustment}
-      footer={
-        <View style={styles.stampRow}>
-          <Ionicons name="calendar-outline" size={18} color={colors.text} />
-          <Text style={styles.stampLabel}>날짜 스탬프</Text>
-          <Switch
-            value={dateStamp}
-            onValueChange={setDateStamp}
-            trackColor={{ true: '#8FAE7F', false: colors.border }}
-            thumbColor={colors.white}
-            {...WEB_SWITCH}
-            ios_backgroundColor={colors.border}
-            accessibilityLabel="날짜 스탬프"
-          />
-        </View>
-      }
-    />
   );
 }
 
@@ -351,6 +421,45 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  mixRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  mixPlus: {
+    ...typography.caption,
+    color: colors.textTertiary,
+  },
+  slot: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 32,
+    paddingLeft: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  slotSelected: {
+    backgroundColor: colors.text,
+  },
+  slotTag: {
+    ...typography.micro,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  slotTagSelected: {
+    color: colors.accentSoft,
+  },
+  slotName: {
+    ...typography.filterName,
+    flex: 1,
+  },
+  slotNameSelected: {
+    color: colors.white,
+  },
   intensityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -382,21 +491,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     height: 44,
     lineHeight: 44,
-  },
-  stampRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginHorizontal: spacing.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.lg,
-    backgroundColor: colors.background,
-  },
-  stampLabel: {
-    ...typography.callout,
-    flex: 1,
   },
   aspects: {
     paddingHorizontal: spacing.lg,

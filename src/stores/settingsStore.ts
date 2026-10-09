@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { DEFAULT_STAMP_STYLE } from '@/constants/film';
+import { DEFAULT_FILM_CAMERA_ID } from '@/constants/filmCameras';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
+import type { DateStampPosition, FrameId } from '@/types/film';
 import type { CaptureRatio, DateFormat, ExportFormat, JpegQuality } from '@/types/settings';
 
 import { persistStorage } from './storage';
@@ -21,6 +24,20 @@ export interface SettingsState {
   defaultFilterId: string;
   defaultIntensity: number;
   defaultRatio: CaptureRatio;
+  // ── Film ──
+  /** Film camera selected when Film mode opens. */
+  defaultFilmCamera: string;
+  /** Grain relative to each film camera's own, 0…200 %. */
+  filmGrain: number;
+  /** Frame for film captures ('camera' = the camera's own, e.g. Polaroid). */
+  defaultFrame: FrameId | 'camera';
+  /** Overall film effect strength, 0…100. */
+  filmIntensity: number;
+  /** Date stamp style (format is `dateFormat`). */
+  stampPosition: DateStampPosition;
+  stampColor: string;
+  /** 50…200 % */
+  stampSize: number;
 }
 
 interface SettingsActions {
@@ -41,7 +58,19 @@ export const DEFAULT_SETTINGS: SettingsState = {
   defaultFilterId: ORIGINAL_FILTER_ID,
   defaultIntensity: DEFAULT_FILTER_INTENSITY,
   defaultRatio: '4:3',
+  defaultFilmCamera: DEFAULT_FILM_CAMERA_ID,
+  filmGrain: 100,
+  defaultFrame: 'camera',
+  filmIntensity: 100,
+  stampPosition: DEFAULT_STAMP_STYLE.position,
+  stampColor: DEFAULT_STAMP_STYLE.color,
+  stampSize: DEFAULT_STAMP_STYLE.size,
 };
+
+/** The date stamp style from Settings (format + position + colour + size). */
+export function settingsStampStyle(s: SettingsState) {
+  return { format: s.dateFormat, position: s.stampPosition, color: s.stampColor, size: s.stampSize };
+}
 
 export const useSettingsStore = create<SettingsState & SettingsActions>()(
   persist(
@@ -52,9 +81,11 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
     }),
     {
       name: 'lumi.settings',
-      version: 1,
+      version: 2,
       storage: persistStorage,
       partialize: ({ set: _set, reset: _reset, ...state }) => state,
+      // v1 → v2: film settings added (missing keys take their defaults).
+      migrate: (state) => ({ ...DEFAULT_SETTINGS, ...(state as Partial<SettingsState>) }) as SettingsState & SettingsActions,
     },
   ),
 );

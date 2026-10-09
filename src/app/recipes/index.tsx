@@ -8,13 +8,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header } from '@/components/common/Header';
 import { PressableScale } from '@/components/common/PressableScale';
 import { RecipeActionsSheet } from '@/components/recipes/RecipeActionsSheet';
-import { getFilter } from '@/constants/filters';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { feedback } from '@/services/feedback';
 import { useCameraStore } from '@/stores/cameraStore';
 import { useRecipeStore } from '@/stores/recipeStore';
 import { showToast } from '@/stores/toastStore';
 import type { Recipe } from '@/types/recipes';
+import { recipeSummary } from '@/utils/recipeSummary';
 
 /** My Recipes: browse, rename, favourite, delete, or shoot with one. */
 export default function RecipesScreen() {
@@ -52,7 +52,7 @@ export default function RecipesScreen() {
           {item.name}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
-          {getFilter(item.baseFilterId).name} {item.intensity} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}
+          {recipeSummary(item)} · {new Date(item.createdAt).toLocaleDateString('ko-KR')}
         </Text>
       </View>
       {item.favorite ? <Ionicons name="heart" size={16} color={colors.accent} /> : null}

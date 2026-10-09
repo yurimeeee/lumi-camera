@@ -9,7 +9,7 @@ import { FILTER_TABS, FILTERS, filtersForTab, ORIGINAL_FILTER_ID } from '@/const
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { feedback } from '@/services/feedback';
 import { useFilterStore } from '@/stores/filterStore';
-import { recipeLookId, recipeToColorLook, useRecipeStore } from '@/stores/recipeStore';
+import { recipeLookId, recipeToLook, useRecipeStore } from '@/stores/recipeStore';
 import type { FilterDefinition, LookTab } from '@/types/filters';
 import type { Recipe } from '@/types/recipes';
 
@@ -150,7 +150,7 @@ export const FilterCarousel = memo(function FilterCarousel({
             id={item.key}
             name={item.recipe.name}
             kindLabel="레시피"
-            look={recipeToColorLook(item.recipe)}
+            look={recipeToLook(item.recipe)}
             badge="recipe"
             image={image}
             selected={item.key === selectedId}

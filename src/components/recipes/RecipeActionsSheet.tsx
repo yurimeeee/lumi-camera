@@ -6,7 +6,7 @@ import { BottomSheet } from '@/components/common/BottomSheet';
 import type { IconName } from '@/components/common/IconButton';
 import { PressableScale } from '@/components/common/PressableScale';
 import { TextPromptDialog } from '@/components/common/TextPromptDialog';
-import { getFilter } from '@/constants/filters';
+import { recipeSummary } from '@/utils/recipeSummary';
 import { colors, spacing, typography } from '@/constants/theme';
 import { feedback } from '@/services/feedback';
 import { deleteRecipe } from '@/services/recipes';
@@ -80,7 +80,7 @@ export function RecipeActionsSheet({ recipeId, onClose, onApply, applyLabel = '�
       <BottomSheet visible={!!recipe} onClose={onClose} title={recipe?.name}>
         {recipe ? (
           <Text style={styles.meta}>
-            {getFilter(recipe.baseFilterId).name} · {new Date(recipe.createdAt).toLocaleDateString('ko-KR')}
+            {recipeSummary(recipe)} · {new Date(recipe.createdAt).toLocaleDateString('ko-KR')}
           </Text>
         ) : null}
         <View style={styles.rows}>

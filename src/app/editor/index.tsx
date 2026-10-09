@@ -14,12 +14,12 @@ import {
   AdjustPanel,
   CropPanel,
   DEFAULT_BRUSH,
-  EffectsPanel,
   FilterPanel,
   toBrush,
   TouchPanel,
 } from '@/components/editor/panels';
 import { CurvesPanel } from '@/components/editor/CurvesPanel';
+import { FilmPanel } from '@/components/editor/FilmPanel';
 import { HslPanel } from '@/components/editor/HslPanel';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
 import { aspectRatioOf } from '@/constants/crop';
@@ -33,7 +33,8 @@ import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { useSaveEdit } from '@/hooks/useSaveEdit';
 import { useWorkingImage } from '@/hooks/useWorkingImage';
 import { DATE_STAMP_FONT } from '@/render/DateStampLayer';
-import { useCanRedo, useCanUndo, useEditorStore } from '@/stores/editorStore';
+import { lookOf, useCanRedo, useCanUndo, useEditorStore } from '@/stores/editorStore';
+import { useLastLookStore } from '@/stores/lastLookStore';
 import { confirmAction } from '@/utils/dialogs';
 
 export default function EditorScreen() {
@@ -95,6 +96,8 @@ export default function EditorScreen() {
 
   const leave = useCallback(() => {
     const done = () => {
+      const { present, past, restored: wasRestored } = useEditorStore.getState();
+      if (past.length > 0 || wasRestored) useLastLookStore.getState().set(lookOf(present));
       useEditorStore.getState().close();
       if (router.canGoBack()) router.back();
       else router.replace('/');
@@ -189,6 +192,7 @@ export default function EditorScreen() {
               zoomEnabled={!cropping}
               focus={focus}
               autoFrame={tool === 'retouch'}
+              showFrame={!cropping}
             />
             {cropping && fitted ? (
               <View style={[styles.cropLayer, { width: fitted.width, height: fitted.height, left: (box.width - fitted.width) / 2, top: (box.height - fitted.height) / 2 }]}>
@@ -240,7 +244,7 @@ export default function EditorScreen() {
           ) : null}
           {tool === 'reshape' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}
           {tool === 'crop' ? <CropPanel source={source} /> : null}
-          {tool === 'effects' ? <EffectsPanel /> : null}
+          {tool === 'film' ? <FilmPanel /> : null}
         </Animated.View>
         <EditorToolbar value={tool} onChange={setTool} />
       </View>

@@ -13,7 +13,8 @@ export interface PickedImage {
   uri: string;
   width: number;
   height: number;
-  takenAt: number;
+  /** Capture date from the photo's EXIF, null when unknown. */
+  takenAt: number | null;
 }
 
 export type SaveResult = { ok: true } | { ok: false; reason: 'permission' | 'error'; message?: string };

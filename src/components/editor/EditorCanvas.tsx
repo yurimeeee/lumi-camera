@@ -19,6 +19,8 @@ import { useReshapeField } from '@/hooks/useReshapeField';
 import type { WorkingImage } from '@/hooks/useWorkingImage';
 import { useZoom } from '@/hooks/useZoom';
 import { DateStampLayer } from '@/render/DateStampLayer';
+import { FrameLayer } from '@/render/FrameLayer';
+import { frameLayout } from '@/render/frameLayout';
 import { FaceGuides, LandmarkDebugLayer, RegionDebugLayer } from '@/render/FaceOverlays';
 import { LumiLayer } from '@/render/LumiLayer';
 import type { DetectedFace } from '@/services/faceDetection/types';
@@ -26,11 +28,10 @@ import { faceRender } from '@/services/faceWarp/faceRender';
 import { buildUniforms, isIdentity, resolveProcessing } from '@/services/imageProcessing';
 import { frameSize, frameToSource, sourceToFrame } from '@/services/reshape';
 import { useEditorStore } from '@/stores/editorStore';
-import { useSettingsStore } from '@/stores/settingsStore';
 import { MAX_SPOTS, spotUniforms } from '@/services/blemish';
 import { showToast } from '@/stores/toastStore';
 import type { Geometry, NormalizedRect, SourceImage } from '@/types/editing';
-import { formatDateStamp } from '@/utils/dateStamp';
+import { formatDateStamp, stampDateOf } from '@/utils/dateStamp';
 
 interface Props {
   working: WorkingImage;
@@ -55,6 +56,8 @@ interface Props {
   brush: Brush | null;
   /** Pinch / wheel zoom (off while cropping, where the overlay maps the unzoomed frame). */
   zoomEnabled: boolean;
+  /** Draw the photo frame (off while cropping, where the crop overlay maps the bare photo). */
+  showFrame: boolean;
   /**
    * Area to frame automatically (frame-normalised), e.g. the nose while a nose
    * tool is selected; null for the whole photo. Ignored once the user has
@@ -107,6 +110,7 @@ export const EditorCanvas = memo(function EditorCanvas({
   zoomEnabled,
   focus,
   autoFrame,
+  showFrame,
 }: Props) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
@@ -114,16 +118,29 @@ export const EditorCanvas = memo(function EditorCanvas({
   const retouch = useEditorStore((s) => s.present.retouch);
   const hsl = useEditorStore((s) => s.present.hsl);
   const curves = useEditorStore((s) => s.present.curves);
+  const mix = useEditorStore((s) => s.present.mix);
+  const film = useEditorStore((s) => s.present.film);
   const strokes = useEditorStore((s) => s.present.reshape);
   const spots = useEditorStore((s) => s.present.spots);
   const faceEdits = useEditorStore((s) => s.present.faces);
   const dateStamp = useEditorStore((s) => s.present.dateStamp);
-  const takenAt = useEditorStore((s) => s.source?.takenAt ?? 0);
-  const dateFormat = useSettingsStore((s) => s.dateFormat);
+  const stampStyle = useEditorStore((s) => s.present.stamp);
+  const stampDate = useEditorStore((s) => stampDateOf(s.source, s.present));
+  const frameState = useEditorStore((s) => s.present.frame);
 
-  const { width, height } = fitContain(working.width, working.height, boxWidth, boxHeight);
-  const offsetX = (boxWidth - width) / 2;
-  const offsetY = (boxHeight - height) / 2;
+  // The frame (if any) fits the box; the photo sits inside it at its own aspect.
+  const frame = showFrame ? frameState : null;
+  const unit = useMemo(() => (frame && frame.id !== 'none' ? frameLayout(frame, working.width, working.height, false) : null), [frame, working.width, working.height]);
+  const outer = unit ? fitContain(unit.width, unit.height, boxWidth, boxHeight) : fitContain(working.width, working.height, boxWidth, boxHeight);
+  const frameScale = unit ? outer.width / unit.width : 1;
+  const width = unit ? Math.round(unit.photo.width * frameScale) : outer.width;
+  const height = unit ? Math.round(unit.photo.height * frameScale) : outer.height;
+  const offsetX = (boxWidth - outer.width) / 2 + (unit ? unit.photo.x * frameScale : 0);
+  const offsetY = (boxHeight - outer.height) / 2 + (unit ? unit.photo.y * frameScale : 0);
+  const frameTransform = useMemo(
+    () => (unit ? [{ translateX: -unit.photo.x * frameScale }, { translateY: -unit.photo.y * frameScale }, { scale: frameScale }] : []),
+    [unit, frameScale],
+  );
   const reshape = useReshapeField(strokes, geometry, source);
 
   const last = useRef<{ x: number; y: number } | null>(null);
@@ -140,7 +157,8 @@ export const EditorCanvas = memo(function EditorCanvas({
     { translateY: offsetY + zoom.y.value },
     { scale: zoom.scale.value },
   ]);
-  const photoClip = useMemo(() => rrect(rect(0, 0, width, height), radius.sm, radius.sm), [width, height]);
+  const photoRadius = unit ? unit.radius * frameScale : radius.sm;
+  const photoClip = useMemo(() => rrect(rect(0, 0, width, height), photoRadius, photoRadius), [width, height, photoRadius]);
 
   // Automatic framing follows the selected tool (a value key, so a new object
   // with the same rect doesn't move the view).
@@ -169,8 +187,8 @@ export const EditorCanvas = memo(function EditorCanvas({
   const facePlan = face.plan;
 
   const processing = useMemo(
-    () => resolveProcessing({ filter: getFilter(filterId), intensity, adjustments, retouch, hsl, curves }),
-    [filterId, intensity, adjustments, retouch, hsl, curves],
+    () => resolveProcessing({ filter: getFilter(filterId), intensity, mix, adjustments, retouch, hsl, curves, film }),
+    [filterId, intensity, mix, adjustments, retouch, hsl, curves, film],
   );
   const uniforms = useMemo(() => {
     if (isIdentity(processing) && !reshape && spots.length === 0 && !face.active) return null;
@@ -363,6 +381,11 @@ export const EditorCanvas = memo(function EditorCanvas({
       >
         <Canvas style={StyleSheet.absoluteFill}>
           <Group transform={photoTransform}>
+            {unit && frame && !showOriginal ? (
+              <Group transform={frameTransform}>
+                <FrameLayer frame={frame} layout={unit} />
+              </Group>
+            ) : null}
             <Group clip={photoClip}>
               <LumiLayer
                 image={working.image}
@@ -371,6 +394,7 @@ export const EditorCanvas = memo(function EditorCanvas({
                 uniforms={showOriginal ? null : uniforms}
                 reshape={reshape}
                 curves={processing.curves}
+                mixCurves={processing.mix?.curves ?? null}
               />
               {showFaceGuides && !showOriginal ? (
                 <FaceGuides outlines={faceOutlines} selectedId={selectedFaceId} plan={facePlan} />
@@ -385,12 +409,15 @@ export const EditorCanvas = memo(function EditorCanvas({
                   plan={showOriginal ? null : facePlan}
                 />
               ) : null}
-              {dateStamp && typeface && !showOriginal ? (
+              {dateStamp && stampDate !== null && typeface && !showOriginal ? (
                 <DateStampLayer
-                  text={formatDateStamp(takenAt, dateFormat)}
+                  text={formatDateStamp(stampDate, stampStyle.format)}
                   typeface={typeface}
                   width={width}
                   height={height}
+                  position={stampStyle.position}
+                  color={stampStyle.color}
+                  size={stampStyle.size}
                 />
               ) : null}
             </Group>
