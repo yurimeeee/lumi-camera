@@ -32,6 +32,7 @@ export default function RootLayout() {
           <Stack.Screen name="settings/index" />
           <Stack.Screen name="recipes/index" />
           <Stack.Screen name="batch/index" />
+          <Stack.Screen name="studio/index" options={{ animation: 'fade_from_bottom', gestureEnabled: false }} />
         </Stack>
         <Toast />
       </View>

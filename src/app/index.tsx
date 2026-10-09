@@ -467,6 +467,9 @@ export default function CameraScreen() {
           <PressableScale onPress={() => setPresetsOpen(true)} accessibilityRole="button" accessibilityLabel="촬영 프리셋">
             <Text style={styles.mode}>PRESET</Text>
           </PressableScale>
+          <PressableScale onPress={() => router.push('/studio')} accessibilityRole="button" accessibilityLabel="프레임 스튜디오">
+            <Text style={styles.mode}>FRAME</Text>
+          </PressableScale>
         </View>
 
         <View style={styles.controls}>

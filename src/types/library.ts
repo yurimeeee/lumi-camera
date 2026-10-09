@@ -15,6 +15,8 @@ export interface PickedImage {
   height: number;
   /** Capture date from the photo's EXIF, null when unknown. */
   takenAt: number | null;
+  /** e.g. image/png (keeps alpha in Frame Studio imports); unknown on some platforms. */
+  mimeType?: string | null;
 }
 
 export type SaveResult = { ok: true } | { ok: false; reason: 'permission' | 'error'; message?: string };

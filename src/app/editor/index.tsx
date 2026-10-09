@@ -19,6 +19,7 @@ import {
   TouchPanel,
 } from '@/components/editor/panels';
 import { CurvesPanel } from '@/components/editor/CurvesPanel';
+import { useOpenStudioFromEditor } from '@/features/frame-studio/hooks/useOpenStudioFromEditor';
 import { FilmPanel } from '@/components/editor/FilmPanel';
 import { HslPanel } from '@/components/editor/HslPanel';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
@@ -88,6 +89,7 @@ export default function EditorScreen() {
   const [debugLandmarks, setDebugLandmarks] = useState(false);
   const typeface = useTypeface(DATE_STAMP_FONT);
   const { save, saving } = useSaveEdit(typeface);
+  const studio = useOpenStudioFromEditor(typeface);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -158,6 +160,13 @@ export default function EditorScreen() {
             onPress={() =>
               confirmAction({ title: '모든 편집을 초기화할까요?', confirmText: '초기화', destructive: true, onConfirm: resetAll })
             }
+          />
+          <IconButton
+            icon="albums-outline"
+            size={20}
+            accessibilityLabel="프레임 스튜디오에서 꾸미기"
+            disabled={studio.opening}
+            onPress={studio.open}
           />
         </View>
         <PressableScale

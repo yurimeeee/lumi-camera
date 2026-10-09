@@ -1,0 +1,548 @@
+{
+  "version": 1,
+  "frames": [
+    {
+      "id": "classic_polaroid",
+      "asset": "frames/classic_polaroid.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.6890909090909091
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f5f0e4"
+    },
+    {
+      "id": "vintage_polaroid",
+      "asset": "frames/vintage_polaroid.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.6890909090909091
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e8dcc6"
+    },
+    {
+      "id": "faded_instant",
+      "asset": "frames/faded_instant.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.6890909090909091
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f0e5d4"
+    },
+    {
+      "id": "cream_instant",
+      "asset": "frames/cream_instant.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.6890909090909091
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#fff4e5"
+    },
+    {
+      "id": "wide_instant",
+      "asset": "frames/wide_instant.svg",
+      "canvas": {
+        "width": 1100,
+        "height": 850
+      },
+      "photoSlot": {
+        "x": 0.08454545454545455,
+        "y": 0.06941176470588235,
+        "width": 0.83,
+        "height": 0.6894117647058824
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e5d6be"
+    },
+    {
+      "id": "mini_instant",
+      "asset": "frames/mini_instant.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.6890909090909091
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#efe8db"
+    },
+    {
+      "id": "negative_35mm",
+      "asset": "frames/negative_35mm.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.11,
+        "y": 0.1,
+        "width": 0.78,
+        "height": 0.8
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#27211f"
+    },
+    {
+      "id": "film_strip",
+      "asset": "frames/film_strip.svg",
+      "canvas": {
+        "width": 850,
+        "height": 1250
+      },
+      "photoSlot": {
+        "x": 0.10941176470588235,
+        "y": 0.1,
+        "width": 0.78,
+        "height": 0.8
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#302722"
+    },
+    {
+      "id": "slide_mount",
+      "asset": "frames/slide_mount.svg",
+      "canvas": {
+        "width": 1100,
+        "height": 850
+      },
+      "photoSlot": {
+        "x": 0.08454545454545455,
+        "y": 0.06941176470588235,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f1e8d5"
+    },
+    {
+      "id": "contact_sheet",
+      "asset": "frames/contact_sheet.svg",
+      "canvas": {
+        "width": 850,
+        "height": 1250
+      },
+      "photoSlot": {
+        "x": 0.08,
+        "y": 0.08,
+        "width": 0.84,
+        "height": 0.84
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#1e1b1a"
+    },
+    {
+      "id": "vintage_film_border",
+      "asset": "frames/vintage_film_border.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.11,
+        "y": 0.1,
+        "width": 0.78,
+        "height": 0.8
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e5d8bd"
+    },
+    {
+      "id": "old_paper",
+      "asset": "frames/old_paper.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e3d1b4"
+    },
+    {
+      "id": "torn_paper",
+      "asset": "frames/torn_paper.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e8d9c4"
+    },
+    {
+      "id": "handmade_paper",
+      "asset": "frames/handmade_paper.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e6d8c7"
+    },
+    {
+      "id": "textured_card",
+      "asset": "frames/textured_card.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e4d2bd"
+    },
+    {
+      "id": "postcard",
+      "asset": "frames/postcard.svg",
+      "canvas": {
+        "width": 1100,
+        "height": 850
+      },
+      "photoSlot": {
+        "x": 0.08454545454545455,
+        "y": 0.06941176470588235,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e7dac5"
+    },
+    {
+      "id": "photo_print",
+      "asset": "frames/photo_print.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#faf5ea"
+    },
+    {
+      "id": "tape_frame",
+      "asset": "frames/tape_frame.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#eadac4"
+    },
+    {
+      "id": "notebook_frame",
+      "asset": "frames/notebook_frame.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f0e8d7"
+    },
+    {
+      "id": "journal_page",
+      "asset": "frames/journal_page.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#e8d6b9"
+    },
+    {
+      "id": "layered_paper",
+      "asset": "frames/layered_paper.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#d6c0a5"
+    },
+    {
+      "id": "vintage_collage",
+      "asset": "frames/vintage_collage.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#d9c3ac"
+    },
+    {
+      "id": "thin_border",
+      "asset": "frames/thin_border.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.034444444444444444,
+        "y": 0.034545454545454546,
+        "width": 0.9311111111111111,
+        "height": 0.9309090909090909
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#fbf8f2"
+    },
+    {
+      "id": "wide_border",
+      "asset": "frames/wide_border.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f4ecdf"
+    },
+    {
+      "id": "rounded_print",
+      "asset": "frames/rounded_print.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.08444444444444445,
+        "y": 0.07,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f3eadb"
+    },
+    {
+      "id": "gallery_frame",
+      "asset": "frames/gallery_frame.svg",
+      "canvas": {
+        "width": 900,
+        "height": 1100
+      },
+      "photoSlot": {
+        "x": 0.034444444444444444,
+        "y": 0.034545454545454546,
+        "width": 0.9311111111111111,
+        "height": 0.9309090909090909
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#eee5d8"
+    },
+    {
+      "id": "clean_editorial",
+      "asset": "frames/clean_editorial.svg",
+      "canvas": {
+        "width": 1100,
+        "height": 850
+      },
+      "photoSlot": {
+        "x": 0.08454545454545455,
+        "y": 0.06941176470588235,
+        "width": 0.83,
+        "height": 0.72
+      },
+      "layerOrder": [
+        "photo",
+        "frame"
+      ],
+      "editableColor": "#f8f6f0"
+    }
+  ],
+  "textures": [
+    "faded_blue.png",
+    "linen.png",
+    "kraft_paper.png",
+    "cream_canvas.png",
+    "warm_paper.png",
+    "handmade_paper.png",
+    "aged_paper.png",
+    "dusty_pink.png"
+  ],
+  "decorations": [
+    "sparkle.svg",
+    "pink_tape.png",
+    "clear_tape.png",
+    "star_doodle.svg",
+    "sage_tape.png",
+    "heart_doodle.svg",
+    "washi_tape.png"
+  ],
+  "layouts": [
+    "single",
+    "duo_vertical",
+    "duo_horizontal",
+    "grid_2x2",
+    "strip_3",
+    "grid_3x3",
+    "editorial",
+    "scrapbook",
+    "contact_sheet"
+  ]
+}

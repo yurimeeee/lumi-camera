@@ -63,7 +63,7 @@ export function parseExifDate(value: unknown): number | null {
 
 function toPicked(a: ImagePicker.ImagePickerAsset): PickedImage {
   const exif = a.exif as Record<string, unknown> | null | undefined;
-  return { uri: a.uri, width: a.width, height: a.height, takenAt: parseExifDate(exif?.DateTimeOriginal ?? exif?.DateTime) };
+  return { uri: a.uri, width: a.width, height: a.height, takenAt: parseExifDate(exif?.DateTimeOriginal ?? exif?.DateTime), mimeType: a.mimeType ?? null };
 }
 
 /**

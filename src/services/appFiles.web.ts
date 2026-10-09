@@ -24,6 +24,9 @@ export async function storeOriginal(uri: string): Promise<string> {
   }
 }
 
+/** Studio images are kept like originals (data URLs). */
+export const storeStudioFile = storeOriginal;
+
 export function pruneOriginals(_keep: readonly (string | null | undefined)[]): void {}
 
 /** Blob URLs don't survive a reload; data URLs do. */

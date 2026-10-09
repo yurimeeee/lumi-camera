@@ -39,13 +39,13 @@ export async function pickImageFromSystem(): Promise<PickedImage | null> {
   if (result.canceled || !result.assets[0]) return null;
   const a = result.assets[0];
   // A browser file has no reliable capture date (lastModified is not one).
-  return { uri: a.uri, width: a.width, height: a.height, takenAt: null };
+  return { uri: a.uri, width: a.width, height: a.height, takenAt: null, mimeType: a.mimeType ?? null };
 }
 
 export async function pickImagesFromSystem(limit: number): Promise<PickedImage[]> {
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: true, selectionLimit: limit });
   if (result.canceled) return [];
-  return result.assets.map((a) => ({ uri: a.uri, width: a.width, height: a.height, takenAt: null }));
+  return result.assets.map((a) => ({ uri: a.uri, width: a.width, height: a.height, takenAt: null, mimeType: a.mimeType ?? null }));
 }
 
 export async function saveToLibrary(fileUri: string): Promise<SaveResult> {

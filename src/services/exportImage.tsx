@@ -41,7 +41,7 @@ export async function loadSkImage(uri: string): Promise<SkImage> {
   return image;
 }
 
-function writeImage(bytes: Uint8Array, prefix: string, format: ExportFormat = 'jpeg'): string {
+export function writeImage(bytes: Uint8Array, prefix: string, format: ExportFormat = 'jpeg'): string {
   if (isWeb) {
     // No file system on web: hand back a data URL for download.
     let bin = '';

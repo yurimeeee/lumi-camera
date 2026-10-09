@@ -9,6 +9,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 const ORIGINALS = 'originals';
 const RECIPES = 'recipes';
+const STUDIO = 'studio';
 
 function dir(name: string): Directory {
   const d = new Directory(Paths.document, name);
@@ -21,6 +22,18 @@ export async function storeOriginal(uri: string): Promise<string> {
   const src = new File(uri);
   const ext = src.extension || '.jpg';
   const dest = new File(dir(ORIGINALS), `original-${Date.now()}${ext}`);
+  await src.copy(dest);
+  return dest.uri;
+}
+
+/**
+ * Copies a Frame Studio image (photo, album frame, background, texture) into
+ * Lumi's studio folder. Kept apart from originals, which the editor prunes.
+ */
+export async function storeStudioFile(uri: string): Promise<string> {
+  const src = new File(uri);
+  const ext = src.extension || '.jpg';
+  const dest = new File(dir(STUDIO), `studio-${Date.now()}-${Math.floor(Math.random() * 1e6)}${ext}`);
   await src.copy(dest);
   return dest.uri;
 }
