@@ -1,5 +1,7 @@
 import type { AiMaskTarget, MaskImageRef } from '@/types/phase4';
 
+import { fileExists } from '../appFiles';
+
 import { backend } from './backend';
 import type { SegmentationSource, SegmentKind } from './types';
 
@@ -32,6 +34,11 @@ export function segment(source: SegmentationSource, kind: SegmentKind): Promise<
   if (!backend || !backend.supports[kind]) return Promise.reject(new Error('unsupported'));
   const key = `${source.uri}|${kind}`;
   let p = cache.get(key);
+  // Unused mask files are pruned (editProject.pruneStoredOriginals): re-run if this one is gone.
+  if (p) {
+    const cached = p;
+    p = cached.then((r) => (fileExists(r.uri) ? r : (cache.delete(key), segment(source, kind))));
+  }
   if (!p) {
     p = backend.segment(source, kind);
     cache.set(key, p);

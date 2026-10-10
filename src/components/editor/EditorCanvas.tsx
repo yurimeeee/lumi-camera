@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Canvas, Circle, Group, Path, Rect, rect, rrect, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { Canvas, Circle, ColorMatrix, Group, Image as SkiaImage, Path, Rect, rect, rrect, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -17,6 +17,8 @@ import { getFilter } from '@/constants/filters';
 import { colors, radius, typography } from '@/constants/theme';
 import { useBackgroundLayer } from '@/hooks/useBackgroundLayer';
 import { useMaskRender } from '@/hooks/useMaskRender';
+import { loadMaskImages } from '@/services/masks/maskRender';
+import { sourceToOutput } from '@/services/masks/maskRaster';
 import { useReshapeField } from '@/hooks/useReshapeField';
 import type { WorkingImage } from '@/hooks/useWorkingImage';
 import { useZoom } from '@/hooks/useZoom';
@@ -632,6 +634,21 @@ export const EditorCanvas = memo(function EditorCanvas({
       return { path, width: st.radius * short * pxPerSource * 2 };
     });
   }, [selection, geometry, width, height, source.width, source.height]);
+  // Tap selections: the found object's mask, tinted.
+  const tapUri = selection?.kind === 'tap' ? selection.image.uri : null;
+  const [tapImage, setTapImage] = useState<{ uri: string; image: SkImage } | null>(null);
+  useEffect(() => {
+    if (!tapUri) return;
+    let alive = true;
+    loadMaskImages([tapUri]).then((m) => {
+      const image = m.get(tapUri);
+      if (alive && image) setTapImage({ uri: tapUri, image });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [tapUri]);
+  const tapMatrix = useMemo(() => Skia.Matrix(sourceToOutput(geometry, source.width, source.height, width, height)), [geometry, source.width, source.height, width, height]);
   const overlayStroke = useDerivedValue(() => 1.5 / zoom.scale.value);
   const overlayShadow = useDerivedValue(() => 3 / zoom.scale.value);
   const overlayHandle = useDerivedValue(() => 6 / zoom.scale.value);
@@ -682,6 +699,14 @@ export const EditorCanvas = memo(function EditorCanvas({
                 maskAtlas={maskRender.atlas?.image ?? null}
                 bgLayer={bgLayer}
               />
+              {tapUri && tapImage?.uri === tapUri && !showOriginal ? (
+                <Group matrix={tapMatrix} opacity={0.5}>
+                  <SkiaImage image={tapImage.image} x={0} y={0} width={source.width} height={source.height} fit="fill">
+                    {/* Mask brightness → alpha, colour = Lumi apricot. */}
+                    <ColorMatrix matrix={[0, 0, 0, 0, 0.91, 0, 0, 0, 0, 0.58, 0, 0, 0, 0, 0.42, 1, 0, 0, 0, 0]} />
+                  </SkiaImage>
+                </Group>
+              ) : null}
               {selectionOverlay && !showOriginal ? (
                 <Group opacity={0.5}>
                   {selectionOverlay.map((o, i) =>

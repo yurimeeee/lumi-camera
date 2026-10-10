@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createEditState, useEditorStore } from '@/stores/editorStore';
 import type { EditState, SourceImage } from '@/types/editing';
 
-import { fileExists, pruneOriginals } from './appFiles';
+import { fileExists, pruneMaskFiles, pruneOriginals } from './appFiles';
 
 /**
  * Non-destructive edit project. The photo being edited is an app-owned copy
@@ -105,9 +105,27 @@ export function startAutosave(): () => void {
   };
 }
 
-/** Removes stored originals no longer used by the saved project or `alsoKeep`. */
+/** Files an edit references (AI masks, subject mask, object-removal patches and tap selections). */
+export function documentFiles(d: EditState | null | undefined): string[] {
+  if (!d) return [];
+  const out: string[] = [];
+  for (const m of d.masks ?? []) if (m.shape.kind === 'ai') out.push(m.shape.image.uri);
+  if (d.background?.subject) out.push(d.background.subject.uri);
+  for (const r of d.removals ?? []) {
+    out.push(r.patch.uri);
+    if (r.selection.kind === 'tap') out.push(r.selection.image.uri);
+  }
+  return out;
+}
+
+/**
+ * Removes stored originals and mask / patch files no longer used by the saved
+ * project, the open edit (including its undo / redo history) or `alsoKeep`.
+ */
 export async function pruneStoredOriginals(alsoKeep: readonly (string | null | undefined)[]): Promise<void> {
   const project = parseProject(await AsyncStorage.getItem(KEY));
-  const editing = useEditorStore.getState().source?.uri;
-  pruneOriginals([project?.source.uri, editing, ...alsoKeep]);
+  const { source, present, past, future } = useEditorStore.getState();
+  pruneOriginals([project?.source.uri, source?.uri, ...alsoKeep]);
+  const keep = [project?.document, present, ...past, ...future].flatMap(documentFiles);
+  pruneMaskFiles(keep);
 }

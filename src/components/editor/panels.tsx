@@ -36,6 +36,8 @@ import { CurvesPanel } from './CurvesPanel';
 import type { Brush } from './EditorCanvas';
 import { ADJUST_VIEWS, FILTER_VIEWS, type AdjustView, type FilterView } from './editorNav';
 import { HslPanel } from './HslPanel';
+import { RecommendPanel } from './RecommendPanel';
+import type { FaceStatus } from '@/hooks/useFaces';
 import { RemovalPanel, type RemovalUi } from './RemovalPanel';
 import type { SelectiveUi } from './maskTool';
 import { SelectivePanel } from './SelectivePanel';
@@ -44,6 +46,9 @@ import { ToolSliderPanel } from './ToolSliderPanel';
 
 interface FilterPanelProps {
   thumbImage: SkImage | null;
+  /** Faces in the photo (for 추천). */
+  faceStatus: FaceStatus;
+  faceCount: number;
   view: FilterView;
   onViewChange: (view: FilterView) => void;
   /** Preset category (shared by Presets and Mix). */
@@ -56,7 +61,7 @@ interface FilterPanelProps {
  * the selected look) and My Recipe (saved looks: apply, long press to manage,
  * + to save the current edit).
  */
-export function FilterPanel({ thumbImage, view, onViewChange, tab, onTabChange }: FilterPanelProps) {
+export function FilterPanel({ thumbImage, faceStatus, faceCount, view, onViewChange, tab, onTabChange }: FilterPanelProps) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
   const recipeId = useEditorStore((s) => s.present.recipeId);
@@ -143,7 +148,14 @@ export function FilterPanel({ thumbImage, view, onViewChange, tab, onTabChange }
     );
 
   let body: ReactNode;
-  if (view === 'mix') {
+  if (view === 'recommend') {
+    body = (
+      <>
+        {lookRow}
+        <RecommendPanel image={thumbImage} faceStatus={faceStatus} faceCount={faceCount} />
+      </>
+    );
+  } else if (view === 'mix') {
     body = (
       <>
         <View style={styles.intensityRow}>

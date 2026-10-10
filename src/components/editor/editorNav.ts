@@ -4,7 +4,7 @@ import type { LookTab } from '@/types/filters';
 /** Main editor menus (bottom toolbar). */
 export type EditorTool = 'filter' | 'adjust' | 'portrait' | 'touch' | 'effects' | 'frame' | 'crop';
 
-export type FilterView = 'presets' | 'mix' | 'recipes';
+export type FilterView = 'presets' | 'recommend' | 'mix' | 'recipes';
 export type AdjustView = 'basic' | 'hsl' | 'curves' | 'selective';
 export type EffectsView = 'film' | 'grain' | 'leak' | 'bloom' | 'background';
 export type FrameView = 'frames' | 'layouts' | 'background' | 'decorate';
@@ -35,6 +35,7 @@ export const DEFAULT_NAV: EditorNav = {
 
 export const FILTER_VIEWS: readonly { value: FilterView; label: string }[] = [
   { value: 'presets', label: 'Presets' },
+  { value: 'recommend', label: '추천' },
   { value: 'mix', label: 'Mix' },
   { value: 'recipes', label: 'My Recipe' },
 ];

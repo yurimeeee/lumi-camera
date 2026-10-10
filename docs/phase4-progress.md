@@ -1,11 +1,11 @@
 # Phase 4 — AI Smart Editing & Professional Tools: 진행 현황
 
-최종 업데이트: 2026-10-10
+최종 업데이트: 2026-10-10 (Stage B)
 
 | Stage | 상태 |
 | --- | --- |
 | **A — Professional Editing** | ✅ 완료 (자동 테스트 + 웹 E2E 검증) |
-| **B — AI Editing** | 🟡 진행 중 (엔진·UI 대부분 동작, 일부 남음) |
+| **B — AI Editing** | ✅ 구현 완료 (iPhone 실기기 검증만 남음 — EAS 빌드 필요) |
 | **C — Workflow & Export** | ⬜ 예정 |
 
 ---
@@ -58,29 +58,23 @@
   - Frame Studio와 네이티브 라이브 카메라가 셰이더 child 목록을 직접 만들던 부분을 수정했습니다(Frame Studio 37/37 통과).
   - face-warp 체크 1196 케이스 통과, 엔진 테스트 92개 통과.
 
-## 3. Stage B — 현재 상태 (이번 커밋에 포함, 일부 미완)
+## 3. Stage B — 완료 내역
 
 | 항목 | 상태 | 비고 |
 | --- | --- | --- |
-| 9. 피사체 분리 | ✅ 동작 | iOS: `modules/lumi-vision`(Vision person segmentation iOS 15+, foreground instance + person 합성 iOS 17+). macOS 하네스로 실제 사진에서 실행했고 iOS 16.4 SDK로 컴파일 확인. 웹: MediaPipe selfie-multiclass + DeepLab-v3. **iPhone 실기기 실행은 미검증** |
-| 10. 배경 흐림 | ✅ 동작 | 정규화 합성곱(피사체 색 번짐 없음)으로 구현, 강도·크기·경계 조절. 테스트와 웹 E2E 확인. 깊이 정보(Depth) 활용은 미구현 |
-| 11. 배경 교체 | ✅ 동작 | 단색·그라데이션·종이·앨범 이미지에 확대·위치·흐림·밝기·채도 조절. Frame Studio의 `drawBackground`와 팔레트를 재사용 |
-| 12. 객체 제거 | 🟡 동작 | 브러시·올가미·탭, 미리보기 → 적용/취소, Undo/Redo, Export 반영(웹 E2E 확인). PatchMatch(전 플랫폼), MI-GAN(웹 전용, 28MB, MIT). **사람 크기의 큰 물체는 두 엔진 모두 잔상이 남음(기술적 제약)**. iOS에는 MI-GAN 런타임 없음 |
-| 13. AI 마스크 선택 | ✅ 동작 | 피사체·배경·인물·피부(피부는 웹만). **하늘은 비활성**: 사용 가능한 하늘 분할 모델이 없음(ADE20K 모델 변환 실패) |
-| 14. 필터 추천 | ⬜ 미착수 | 규칙 기반(밝기, 색온도, 채도, 대비, 인물 유무)으로 구현 예정. 통계 함수(`measureImage`)는 준비됨 |
+| 9. 피사체 분리 | ✅ | iOS: `modules/lumi-vision`(Vision person segmentation iOS 15+, foreground instance ∪ person matte iOS 17+). macOS 하네스로 실제 사진에서 실행(35–250 ms, 첫 호출 ~3 s), iOS 16.4 SDK 컴파일 확인. 웹: MediaPipe selfie-multiclass + DeepLab-v3(1.5 s) |
+| 10. 배경 흐림 | ✅ | 정규화 합성곱으로 피사체 색이 번지지 않음, 강도·크기·경계. 테스트 + 웹 E2E. **Depth(심도) 활용은 미구현** — 분할 기반 2D 흐림 |
+| 11. 배경 교체 | ✅ | 단색·그라데이션·종이·앨범 이미지 + 확대·위치·흐림·밝기·채도. Frame Studio `drawBackground`·팔레트 재사용. 캔버스 배경과는 별도 데이터(`EditState.background`) |
+| 12. 객체 제거 | ✅ (제약 있음) | 브러시·올가미·탭 → 미리보기 → 적용/취소, Undo/Redo, Export 반영, 탭 선택 오버레이. PatchMatch(전 플랫폼, 웹 E2E 645 ms), MI-GAN(웹, 28MB MIT, 다운로드 포함 32 s). **큰 물체(사람 크기)는 두 엔진 모두 잔상**, 웹 탭 선택은 주변 구조물까지 과선택할 수 있음. iOS는 학습 모델 없음(PatchMatch만) |
+| 13. AI 마스크 선택 | ✅ | 피사체·배경·인물·피부(피부는 웹만). **하늘 비활성** — 사용 가능한 하늘 분할 모델 없음(ADE20K 모델 변환 실패) |
+| 14. 필터 추천 | ✅ | `services/recommend.ts` 규칙 기반(밝기·색온도·채도·대비·하이라이트·색상 분포·얼굴 인식 결과), 카테고리당 최대 3개, 결정적. 필터 › 추천 탭에 실제 필터 썸네일 + 추천 이유. 테스트: 따뜻한 인물→Mellow/Peachy/Cream 계열, 차가운 풍경→Mist/Blue Hour/Breeze, 야간→Film/B&W |
 
-- 개인정보: 모든 AI 처리는 기기 안에서 합니다. 웹은 모델을 처음 내려받기 전에 크기를 안내하고 동의를 받습니다(`services/aiConsent.ts`). 실패하면 편집 상태는 그대로 두고 다시 시도할 수 있습니다(`useAiJob`, `AiJobRow`).
-- 큰 결과물(AI 마스크, 인페인팅 패치)은 파일로 저장하고 문서에는 참조만 둡니다(네이티브 `Documents/masks`, 웹은 data URL).
+- 개인정보: 모든 AI 처리는 기기 안. 웹은 모델 다운로드 전 크기 안내·동의(그룹별: segmentation / inpainting). 실패 시 편집 상태 유지, 다시 시도 가능.
+- 파일 관리: AI 마스크·패치는 `Documents/masks`(웹 data URL). 사진을 새로 열 때 프로젝트·열린 편집·Undo/Redo 기록이 참조하지 않는 파일만 정리(`pruneMaskFiles`), 세그멘테이션 캐시는 파일이 없으면 다시 실행.
 
-### Stage B 남은 작업
-1. 필터 추천(필터 › 추천): 규칙 기반 점수, 실제 필터 썸네일 표시, 추천 근거 표시.
-2. 객체 제거
-   - 큰 영역에 대한 안내 문구 정리.
-   - 탭 선택 결과를 오버레이로 표시.
-   - iOS용 학습 기반 인페인팅 검토(Core ML 변환 또는 onnxruntime-react-native, 개발 빌드 필요).
-3. iOS 실기기 검증: `lumi-vision` 모듈, 분할 품질, 처리 시간, 메모리. EAS 개발 빌드가 필요합니다(원격 빌드라서 사전 승인 필요).
-4. 배경 흐림의 깊이 활용 검토(Portrait HEIC의 disparity 맵).
-5. 마스크·패치 파일 정리(`pruneMaskFiles`를 프로젝트/버전 참조와 연결).
+### Stage B 남은 확인
+1. **iPhone 실기기 검증** — `lumi-vision` 모듈 실행, 분할 품질·시간·메모리, 대용량 Export. 이 Mac의 Xcode 15.4로는 RN 0.86 빌드 불가 → EAS 개발 빌드 필요(원격 프로젝트 생성이라 사전 승인 필요).
+2. 개선 후보: iOS 학습 기반 인페인팅(Core ML), Portrait 사진의 disparity 맵으로 심도 흐림.
 
 ## 4. Stage C — 예정 작업
 
@@ -111,10 +105,10 @@
   - `src/services/autoEnhance.ts`
   - `src/services/masks/{maskRaster,maskRender,shader,backgroundLayer}.ts`
   - `src/services/inpaint/{patchmatch,objectRemoval,migan,migan.web}.ts`
-  - `src/services/segmentation/*`, `src/services/mediapipe.web.ts`, `src/services/aiConsent.ts`
+  - `src/services/segmentation/*`, `src/services/mediapipe.web.ts`, `src/services/aiConsent.ts`, `src/services/recommend.ts`
 - UI
-  - `src/components/editor/{AutoEnhanceRow,SelectivePanel,BackgroundEditPanel,RemovalPanel,AiJobRow,maskTool}.tsx|ts`
+  - `src/components/editor/{AutoEnhanceRow,SelectivePanel,BackgroundEditPanel,RemovalPanel,RecommendPanel,AiJobRow,maskTool}.tsx|ts`
   - `src/hooks/{useMaskRender,useBackgroundLayer,useRemovalBase,useAiJob}.ts`, `src/render/readPixels.ts`
 - 네이티브: `modules/lumi-vision`(Swift: VisionSegmenter, LumiVisionModule)
-- 테스트: `scripts/phase4/*`(`npm run test:phase4`), `scripts/image-engine/{auto,inpaint}.test.ts`
+- 테스트: `scripts/phase4/*`(`npm run test:phase4`), `scripts/image-engine/{auto,inpaint,recommend}.test.ts`
 - 런타임: `scripts/setup-ort.js`(ONNX Runtime Web을 `public/ort`로 복사)

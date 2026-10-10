@@ -66,7 +66,8 @@ export default function EditorScreen() {
   // away (and keep the result while face edits or skin smoothing need it,
   // e.g. after undo or a restore).
   const faceInUse = useEditorStore((s) => needsFaces(s.present));
-  const { faces: detected, status: faceStatus } = useFaces(source, faceInUse || tool === 'portrait');
+  // 필터 › 추천 also needs to know whether there are people.
+  const { faces: detected, status: faceStatus } = useFaces(source, faceInUse || tool === 'portrait' || (tool === 'filter' && nav.filter === 'recommend'));
   // Ids follow the faces the edit was made on (anchors), not detection order.
   const faceAnchors = useEditorStore((s) => s.present.faceAnchors);
   const faces = useMemo(
@@ -291,6 +292,8 @@ export default function EditorScreen() {
           {tool === 'filter' ? (
             <FilterPanel
               thumbImage={thumbImage}
+              faceStatus={faceStatus}
+              faceCount={faces.length}
               view={nav.filter}
               onViewChange={navTo('filter')}
               tab={nav.filterTab}
