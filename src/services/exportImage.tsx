@@ -12,7 +12,7 @@ import type { EditState, SourceImage } from '@/types/editing';
 import type { ExportFormat, JpegQuality } from '@/types/settings';
 import { formatDateStamp, stampDateOf } from '@/utils/dateStamp';
 
-import { withExif } from './exif';
+import { exportMetadata, withExif } from './exif';
 import { encodeExport } from './exportEncoding';
 import { detectFaces } from './faceDetection/FaceDetector';
 import { assignFaceIds } from './faceDetection/faceIdentity';
@@ -30,8 +30,15 @@ import { maskUniforms, renderSlots } from './masks/shader';
 import { backgroundActive } from '@/constants/masks';
 import type { GeoPoint } from './location';
 
+/** keep = capture date + location (if recorded); noLocation = date only; none = no metadata at all. */
+export type ExportMetadata = 'keep' | 'noLocation' | 'none';
+
 export interface ExportOptions {
   highQuality: boolean;
+  /** Long side cap in px; overrides `highQuality` (상세 저장). */
+  maxSide?: number;
+  /** Default `keep`. */
+  metadata?: ExportMetadata;
   format: ExportFormat;
   /** JPEG only. */
   quality: JpegQuality;
@@ -73,7 +80,7 @@ export function writeImage(bytes: Uint8Array, prefix: string, format: ExportForm
  * around it.
  */
 export async function renderEdit(source: SourceImage, edit: EditState, opts: ExportOptions): Promise<ImageFile> {
-  const maxSide = opts.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD;
+  const maxSide = opts.maxSide ?? (opts.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD);
 
   const base = await applyGeometry(source, edit.geometry, maxSide);
   const decoded = await loadSkImage(base.uri);
@@ -201,7 +208,9 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const raster = rendered.makeNonTextureImage() ?? rendered;
   const bytes = encodeExport(raster, opts.format, opts.quality);
   // EXIF (date, optional GPS) is written for JPEG; PNG carries no EXIF here.
-  const out = opts.format === 'jpeg' ? withExif(bytes, { takenAt: source.takenAt, location: opts.location }) : bytes;
+  const metadata = opts.metadata ?? 'keep';
+  // Skia's encoder writes no metadata, so "none" is simply not adding any.
+  const out = opts.format === 'jpeg' ? exportMetadata(bytes, metadata, { takenAt: source.takenAt, location: opts.location }) : bytes;
   return { uri: writeImage(out, 'lumi', opts.format), width: layout?.width ?? width, height: layout?.height ?? height };
 }
 

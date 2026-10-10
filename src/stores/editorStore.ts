@@ -11,7 +11,7 @@ import { DEFAULT_HSL } from '@/services/color/hsl';
 import { applyAutoShare } from '@/services/autoEnhance';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
 import type { DateStampStyle, FilmEffects, FilterMix, FrameSettings } from '@/types/film';
-import type { AutoValues, BackgroundEdit, ImageStats, MaskStroke, ObjectRemoval, SelectiveMask } from '@/types/phase4';
+import type { AutoValues, BackgroundEdit, EditVersion, ImageStats, MaskStroke, ObjectRemoval, SelectiveMask } from '@/types/phase4';
 import type {
   AdjustmentKey,
   Adjustments,
@@ -125,10 +125,12 @@ interface EditorState {
   future: EditState[];
   /** Opened from an autosaved project: leaving should still ask before discarding. */
   restored: boolean;
+  /** Named snapshots of this photo's edit (not part of undo; saved with the project). */
+  versions: readonly EditVersion<EditState>[];
 }
 
 interface EditorActions {
-  open: (source: SourceImage, initial?: Partial<EditState>) => void;
+  open: (source: SourceImage, initial?: Partial<EditState>, versions?: readonly EditVersion<EditState>[]) => void;
   close: () => void;
 
   /** Live updates (sliders). Call `commit()` when the gesture ends. */
@@ -227,6 +229,22 @@ interface EditorActions {
 
   undo: () => void;
   redo: () => void;
+  /**
+   * Shows history step `index` of [...past, present, ...future] (several
+   * undos / redos at once). Steps after it stay redoable until a new edit,
+   * which drops them (linear history).
+   */
+  jumpTo: (index: number) => void;
+
+  /** 편집 붙여넣기: replaces the edit with `fn(edit)` (one undo step). */
+  replaceEdit: (fn: (s: EditState) => EditState) => void;
+
+  // ── Versions ──
+  saveVersion: (name: string) => string;
+  /** Replaces the edit with a version's (one undo step). */
+  restoreVersion: (id: string) => void;
+  renameVersion: (id: string, name: string) => void;
+  deleteVersion: (id: string) => void;
 }
 
 const initial: EditorState = {
@@ -236,6 +254,7 @@ const initial: EditorState = {
   past: [],
   future: [],
   restored: false,
+  versions: [],
 };
 
 export const useEditorStore = create<EditorState & EditorActions>()((set, get) => {
@@ -256,11 +275,19 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   return {
     ...initial,
 
-    open: (source, partial) => {
+    open: (source, partial, versions = []) => {
       const state = createEditState(partial);
       // Restored edits keep their ids; new strokes/spots must not collide.
       for (const item of [...state.reshape, ...state.spots, ...state.masks.flatMap((m) => m.strokes)]) nextStrokeId = Math.max(nextStrokeId, item.id + 1);
-      set({ source, present: state, committed: state, past: [], future: [], restored: false });
+      set({
+        source,
+        present: state,
+        committed: state,
+        past: [],
+        future: [],
+        restored: false,
+        versions: versions.map((v) => ({ ...v, document: createEditState(v.document) })),
+      });
     },
     close: () => set(initial),
 
@@ -489,6 +516,37 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       if (!prev) return;
       set({ present: prev, committed: prev, past: past.slice(0, -1), future: [present, ...future] });
     },
+    jumpTo: (index) => {
+      // Live (uncommitted) changes become a step first.
+      if (get().present !== get().committed) get().commit();
+      const { past, committed, future } = get();
+      const all = [...past, committed, ...future];
+      const target = all[index];
+      if (!target || index === past.length) return;
+      set({ present: target, committed: target, past: all.slice(0, index), future: all.slice(index + 1) });
+    },
+
+    replaceEdit: (fn) => update(fn),
+
+    saveVersion: (name) => {
+      const id = `v${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+      if (get().present !== get().committed) get().commit();
+      const version: EditVersion<EditState> = { id, name: name.trim() || `버전 ${get().versions.length + 1}`, createdAt: Date.now(), document: get().committed };
+      set((s) => ({ versions: [...s.versions, version] }));
+      return id;
+    },
+    restoreVersion: (id) => {
+      const v = get().versions.find((x) => x.id === id);
+      if (!v) return;
+      update(() => v.document);
+    },
+    renameVersion: (id, name) => {
+      const clean = name.trim();
+      if (!clean) return;
+      set((s) => ({ versions: s.versions.map((v) => (v.id === id ? { ...v, name: clean } : v)) }));
+    },
+    deleteVersion: (id) => set((s) => ({ versions: s.versions.filter((v) => v.id !== id) })),
+
     redo: () => {
       const { past, present, future } = get();
       const next = future[0];

@@ -1,12 +1,12 @@
 # Phase 4 — AI Smart Editing & Professional Tools: 진행 현황
 
-최종 업데이트: 2026-10-10 (Stage B)
+최종 업데이트: 2026-10-10 (Stage C)
 
 | Stage | 상태 |
 | --- | --- |
 | **A — Professional Editing** | ✅ 완료 (자동 테스트 + 웹 E2E 검증) |
 | **B — AI Editing** | ✅ 구현 완료 (iPhone 실기기 검증만 남음 — EAS 빌드 필요) |
-| **C — Workflow & Export** | ⬜ 예정 |
+| **C — Workflow & Export** | ✅ 완료 (자동 테스트 + 웹 E2E 검증) |
 
 ---
 
@@ -76,29 +76,44 @@
 1. **iPhone 실기기 검증** — `lumi-vision` 모듈 실행, 분할 품질·시간·메모리, 대용량 Export. 이 Mac의 Xcode 15.4로는 RN 0.86 빌드 불가 → EAS 개발 빌드 필요(원격 프로젝트 생성이라 사전 승인 필요).
 2. 개선 후보: iOS 학습 기반 인페인팅(Core ML), Portrait 사진의 disparity 맵으로 심도 흐림.
 
-## 4. Stage C — 예정 작업
+## 4. Stage C — 완료 내역
 
-1. **편집 기록(History)**
-   - 상단 History 버튼과 Bottom Sheet.
-   - 연속된 스냅샷을 비교해 "필터 — Mellow", "노출 +15" 같은 이름을 붙입니다.
-   - 항목을 누르면 그 시점을 미리보고, 그 시점으로 되돌릴 수 있습니다.
-   - 분기 정책: 되돌린 뒤 새로 편집하면 이후 기록은 버리는 선형 방식입니다. 필요하면 그 전에 버전으로 저장하도록 안내합니다.
-2. **버전(Versions)**: `EditVersion` 스냅샷(원본 사진은 복제하지 않음) 저장, 이름 지정, 복원, 삭제. 프로젝트와 함께 저장합니다.
-3. **편집 복사 / 붙여넣기**
-   - 항목 선택: 필터, 조정, HSL, 커브, 필름 효과, 프레임.
-   - 얼굴, 터치, 마스크, 객체 제거는 기본적으로 제외합니다.
-   - My Recipe의 `Look` 직렬화를 재사용합니다.
-4. **상세 저장(Professional Export)**
-   - 형식: JPEG / PNG / HEIC. HEIC은 `lumi-vision`의 `encodeHeic`으로 하며 iOS만 해당하고 macOS에서 동작 확인했습니다.
-   - 품질: 표준 / 높음 / 최대. 해상도: 원본 / 2048 / 4096 / 사용자 지정.
-   - 메타데이터: 유지 / 위치 제거 / 전체 제거.
-   - 저장 위치: 사진 보관함 / 공유 시트(`expo-sharing`) / 파일.
-   - 기존 빠른 저장은 그대로 유지합니다.
-5. **데이터 마이그레이션**: `EditProject` v1 → v2(문서 버전, 버전 목록). `createEditState`는 이미 Phase 4 필드의 기본값을 채웁니다.
-6. **성능 최적화**: 마스크 atlas의 부분 갱신, 객체 제거의 Web Worker 실행, 고해상도 메모리 상한 적용.
-7. **최종 회귀 테스트와 보고서**: Phase 1~3, Frame Studio, 테스트 시나리오 A~F.
+| 항목 | 상태 | 비고 |
+| --- | --- | --- |
+| 15. 편집 기록 | ✅ | 헤더 🕘 → 기록 시트. 스냅샷 간 차이로 이름 자동 생성(`services/history.ts`: "필터 — Mellow", "노출 +15", "HSL — Orange", "얼굴 · 갸름하게 +10", "피사체 분리", "프레임 — …" 등). 단계를 누르면 그 시점으로 이동(`jumpTo`). **분기 정책: 선형** — 되돌린 뒤 새로 편집하면 이후 기록은 사라짐(시트에 안내, 필요하면 먼저 버전 저장) |
+| 16. 버전 | ✅ | ⋯ › 버전: 저장·복원(1 Undo 단계)·이름 변경·삭제, Original 복원. 보정 값 스냅샷만 저장(원본 사진 복제 없음), 프로젝트와 함께 자동 저장. E2E: 복원 후 색 값이 저장 시점과 정확히 일치 |
+| 17. 편집 복사 / 붙여넣기 | ✅ | ⋯ › 편집 복사 → 다른 사진에서 ⋯ › 편집 붙여넣기(항목 선택: 필터·조정·HSL·커브·필름 효과·프레임). My Recipe의 `Look` 직렬화 재사용, 앱 재시작 후에도 유지. 얼굴·터치·잡티·마스크·객체 제거·배경 분리·자르기는 제외(시트에 이유 표시) |
+| 18. 상세 저장 | ✅ | 저장 버튼 길게 누르기 또는 ⋯ › 상세 저장. 형식 JPEG/PNG/HEIC(HEIC는 iOS 개발 빌드만, ImageIO), 품질 표준/높음/최대, 해상도 원본/2048/4096/직접(가져온 사진보다 키우지 않음), 메타데이터 유지/위치 제거/모두 제거, 저장 위치 사진/공유/파일(iOS는 공유 시트의 ‘파일에 저장’, 웹은 다운로드·Web Share). 빠른 저장(탭)은 그대로. 같은 export 렌더러 사용(화면 캡처 아님) |
+| 19. 데이터 마이그레이션 | ✅ | `EditProject` v1 → v2(`documentVersion`, `versions`). v1 프로젝트는 버전 없이 v2로, Phase 4 필드는 기본값으로 채움(테스트) |
+| 20. 성능 · 안정성 | ✅ (기본) | Export 해상도는 가져온 사진 이하(최대 4096)로 메모리 상한, AI 작업은 화면이 살아 있을 때만 결과 적용, 실패 시 편집 유지, 객체 제거는 30 ms마다 양보해 UI 유지·취소 가능, 미사용 마스크 파일 정리. 마스크 atlas 부분 갱신·Web Worker는 다음 개선 후보 |
 
-## 5. 새로 추가된 주요 파일
+### 검증 (Stage C)
+- 자동: `scripts/image-engine/workflow.test.ts` 10개 — 기록 이름·이동·선형 분기, 버전 저장/복원 일치, 붙여넣기 항목 분리(사진 고유 편집 미전파), v1→v2 마이그레이션, 해상도 계산, 메타데이터 3모드(EXIF 판독).
+- 네이티브 HEIC: 같은 Swift 코드를 macOS에서 실행 — 유지(GPS·날짜), 위치 제거(날짜만), 모두 제거(없음) 확인.
+- 웹 E2E(390px 폭): 헤더 레이아웃, 버전 Warm/Film 저장 → Warm 복원 시 RGB 평균 일치(193.8,188.0,183.2), 기록 "원본 → 필터 — Mellow → 밝기 +41 → 필터 — Noir → …", 다른 사진에 붙여넣기 반영, PNG(메타데이터 없음, 업스케일 안 함)·JPEG(EXIF) 저장.
+
+## 5. 최종 회귀 결과 (Phase 1~3, Frame Studio 포함)
+
+| 검사 | 결과 |
+| --- | --- |
+| `npm run typecheck` / `npm run lint` | 오류 0 |
+| `npm run test:engine` (필터·HSL·커브·레시피·필름·카메라 프리셋·얼굴·Phase 4 엔진·기록) | 109 / 109 |
+| `npm run test:phase4` (마스크·배경·객체 제거, 실제 Skia) | 25 / 25 |
+| `npm run test:frames` (Frame Studio) | 37 / 37 |
+| `npm run check:face-warp` | 1196 케이스 통과 |
+| 웹 E2E 재실행 (Stage A/B/C) | 이전과 동일한 수치 |
+| iOS | Swift 모듈 iOS 16.4 SDK 컴파일 + macOS 실행. **iPhone 실기기 미검증**(EAS 빌드 필요) |
+
+## 6. 남아 있는 기술적 제약
+
+1. iPhone 실기기 검증 미실시 — 로컬 Xcode 15.4로 RN 0.86 빌드 불가, EAS 개발 빌드 필요.
+2. 큰 물체(사람 크기) 객체 제거는 PatchMatch·MI-GAN 모두 잔상, 웹 탭 선택은 과선택 가능. iOS에는 학습 기반 인페인팅 없음.
+3. 하늘 자동 선택 미지원(사용 가능한 하늘 분할 모델 없음). 피부 AI 선택은 웹 전용.
+4. 배경 흐림은 분할 기반 2D(심도 데이터 미사용).
+5. HEIC 저장은 iOS 개발 빌드에서만, 웹은 JPEG/PNG.
+6. 객체 제거의 미리보기 결과(적용 전)는 앱 종료 시 저장되지 않음(적용한 결과는 저장됨).
+
+## 7. 새로 추가된 주요 파일
 
 - 타입·상수: `src/types/phase4.ts`, `src/constants/masks.ts`
 - 엔진
@@ -106,9 +121,11 @@
   - `src/services/masks/{maskRaster,maskRender,shader,backgroundLayer}.ts`
   - `src/services/inpaint/{patchmatch,objectRemoval,migan,migan.web}.ts`
   - `src/services/segmentation/*`, `src/services/mediapipe.web.ts`, `src/services/aiConsent.ts`, `src/services/recommend.ts`
+  - `src/services/{history,editClipboard,proExport,exportOptions}.ts`, `src/stores/clipboardStore.ts`
 - UI
-  - `src/components/editor/{AutoEnhanceRow,SelectivePanel,BackgroundEditPanel,RemovalPanel,RecommendPanel,AiJobRow,maskTool}.tsx|ts`
+  - `src/components/editor/{AutoEnhanceRow,SelectivePanel,BackgroundEditPanel,RemovalPanel,RecommendPanel,AiJobRow,maskTool,WorkflowSheets,ExportSheet}.tsx|ts`
   - `src/hooks/{useMaskRender,useBackgroundLayer,useRemovalBase,useAiJob}.ts`, `src/render/readPixels.ts`
 - 네이티브: `modules/lumi-vision`(Swift: VisionSegmenter, LumiVisionModule)
-- 테스트: `scripts/phase4/*`(`npm run test:phase4`), `scripts/image-engine/{auto,inpaint,recommend}.test.ts`
+- 테스트: `scripts/phase4/*`(`npm run test:phase4`), `scripts/image-engine/{auto,inpaint,recommend,workflow}.test.ts`
+- 의존성: `onnxruntime-web`(웹 MI-GAN), `expo-sharing`(공유 시트)
 - 런타임: `scripts/setup-ort.js`(ONNX Runtime Web을 `public/ort`로 복사)

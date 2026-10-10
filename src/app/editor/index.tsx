@@ -17,6 +17,8 @@ import { AdjustMenu, CropPanel, DEFAULT_BRUSH, FilterPanel, toBrush, TouchPanel 
 import { DEFAULT_SELECTIVE_UI, maskToolOf, type SelectiveUi } from '@/components/editor/maskTool';
 import { DEFAULT_REMOVAL_UI, tapSelection, type RemovalUi } from '@/components/editor/RemovalPanel';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
+import { HistorySheet, MoreSheet, PasteSheet, VersionsSheet } from '@/components/editor/WorkflowSheets';
+import { ExportSheet } from '@/components/editor/ExportSheet';
 import { useOpenStudioFromEditor } from '@/features/frame-studio/hooks/useOpenStudioFromEditor';
 import { aspectRatioOf } from '@/constants/crop';
 import { colors, radius, spacing, typography } from '@/constants/theme';
@@ -43,7 +45,8 @@ export default function EditorScreen() {
   const geometry = useEditorStore((s) => s.present.geometry);
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
-  const { undo, redo, resetAll, setCrop } = useEditorStore.getState();
+  const { undo, redo, setCrop } = useEditorStore.getState();
+  const [sheet, setSheet] = useState<'history' | 'more' | 'versions' | 'paste' | 'export' | null>(null);
 
   const [tool, setTool] = useState<EditorTool>('filter');
   // Sub-tab of each menu, remembered while the editor is open.
@@ -211,16 +214,8 @@ export default function EditorScreen() {
         <View style={styles.history}>
           <IconButton icon="arrow-undo-outline" size={20} accessibilityLabel="실행 취소" disabled={!canUndo} onPress={undo} />
           <IconButton icon="arrow-redo-outline" size={20} accessibilityLabel="다시 실행" disabled={!canRedo} onPress={redo} />
-          <IconButton
-            icon="refresh-circle-outline"
-            size={21}
-            accessibilityLabel="모든 편집 초기화"
-            // A restored project has edits but no history yet.
-            disabled={!canUndo && !restored}
-            onPress={() =>
-              confirmAction({ title: '모든 편집을 초기화할까요?', confirmText: '초기화', destructive: true, onConfirm: resetAll })
-            }
-          />
+          <IconButton icon="time-outline" size={20} accessibilityLabel="편집 기록" onPress={() => setSheet('history')} />
+          <IconButton icon="ellipsis-horizontal-circle-outline" size={21} accessibilityLabel="편집 메뉴 (버전 · 복사 · 붙여넣기 · 초기화)" onPress={() => setSheet('more')} />
           <PressableScale
             style={[styles.compare, before && styles.compareOn, (!working || cropping) && styles.compareOff]}
             disabled={!working || cropping}
@@ -235,9 +230,10 @@ export default function EditorScreen() {
         <PressableScale
           style={[styles.save, saving && styles.saveBusy]}
           onPress={onSave}
+          onLongPress={() => setSheet('export')}
           disabled={saving}
           accessibilityRole="button"
-          accessibilityLabel="사진에 저장"
+          accessibilityLabel="사진에 저장 (길게 누르면 상세 저장)"
         >
           {saving ? <ActivityIndicator size="small" color={colors.white} /> : <Text style={styles.saveText}>저장</Text>}
         </PressableScale>
@@ -333,6 +329,22 @@ export default function EditorScreen() {
         </Animated.View>
         <EditorToolbar value={tool} onChange={setTool} />
       </View>
+      <HistorySheet visible={sheet === 'history'} onClose={() => setSheet(null)} />
+      <MoreSheet
+        visible={sheet === 'more'}
+        onClose={() => setSheet(null)}
+        onVersions={() => setSheet('versions')}
+        onPaste={() => setSheet('paste')}
+        onExport={() => setSheet('export')}
+      />
+      <VersionsSheet visible={sheet === 'versions'} onClose={() => setSheet(null)} />
+      <PasteSheet visible={sheet === 'paste'} onClose={() => setSheet(null)} />
+      <ExportSheet
+        visible={sheet === 'export'}
+        onClose={() => setSheet(null)}
+        typeface={typeface}
+        onSaved={() => setSavedAt(useEditorStore.getState().past.length)}
+      />
     </View>
   );
 }

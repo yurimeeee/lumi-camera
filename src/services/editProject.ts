@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { createEditState, useEditorStore } from '@/stores/editorStore';
-import type { EditState, SourceImage } from '@/types/editing';
+import { EDIT_DOCUMENT_VERSION, type EditState, type SourceImage } from '@/types/editing';
+import type { EditVersion } from '@/types/phase4';
 
 import { fileExists, pruneMaskFiles, pruneOriginals } from './appFiles';
 
@@ -12,14 +13,22 @@ import { fileExists, pruneMaskFiles, pruneOriginals } from './appFiles';
  * it can be restored after the app is closed or killed. Undo history is not
  * persisted.
  */
+/**
+ * v1 (Phases 1–3): document only. v2 (Phase 4): + `documentVersion` and
+ * named `versions`. v1 projects load as v2 with no versions; documents of
+ * any version are completed by createEditState.
+ */
 export interface EditProject {
-  version: 1;
+  version: 2;
+  /** EditState format the document was written with (EDIT_DOCUMENT_VERSION). */
+  documentVersion: number;
   id: string;
   originalUri: string;
   createdAt: number;
   updatedAt: number;
   source: SourceImage;
   document: EditState;
+  versions: EditVersion<EditState>[];
 }
 
 const KEY = 'lumi.project';
@@ -33,9 +42,15 @@ export function serializeProject(p: EditProject): string {
 export function parseProject(json: string | null): EditProject | null {
   if (!json) return null;
   try {
-    const raw = JSON.parse(json) as Partial<EditProject>;
-    if (raw?.version !== 1 || !raw.source?.uri || !raw.document) return null;
-    return { ...(raw as EditProject), document: createEditState(raw.document) };
+    const raw = JSON.parse(json) as Partial<Omit<EditProject, 'version'>> & { version?: number };
+    if ((raw?.version !== 1 && raw?.version !== 2) || !raw.source?.uri || !raw.document) return null;
+    return {
+      ...(raw as EditProject),
+      version: 2,
+      documentVersion: raw.documentVersion ?? 1,
+      document: createEditState(raw.document),
+      versions: (raw.versions ?? []).map((v) => ({ ...v, document: createEditState(v.document) })),
+    };
   } catch {
     return null;
   }
@@ -60,7 +75,7 @@ let current: { id: string; createdAt: number } | null = null;
 
 /** Re-opens a saved project in the editor (same id, so autosave keeps updating it). */
 export function restoreProject(p: EditProject): void {
-  useEditorStore.getState().open(p.source, p.document);
+  useEditorStore.getState().open(p.source, p.document, p.versions);
   useEditorStore.setState({ restored: true });
   // After open(): the store listener resets `current` for a new source.
   current = { id: p.id, createdAt: p.createdAt };
@@ -73,7 +88,7 @@ export function restoreProject(p: EditProject): void {
 export function startAutosave(): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const unsubscribe = useEditorStore.subscribe((state, prev) => {
-    if (state.source === prev.source && state.committed === prev.committed) return;
+    if (state.source === prev.source && state.committed === prev.committed && state.versions === prev.versions) return;
     if (timer) clearTimeout(timer);
     if (!state.source) {
       current = null;
@@ -82,13 +97,15 @@ export function startAutosave(): () => void {
     }
     if (state.source !== prev.source) current = null;
     timer = setTimeout(() => {
-      const { source, committed, past, restored } = useEditorStore.getState();
-      // Nothing to recover until the first edit.
-      if (!source || (past.length === 0 && !restored)) return;
+      const { source, committed, past, restored, versions } = useEditorStore.getState();
+      // Nothing to recover until the first edit (or saved version).
+      if (!source || (past.length === 0 && !restored && versions.length === 0)) return;
       const now = Date.now();
       current ??= { id: `p${now.toString(36)}`, createdAt: now };
       const project: EditProject = {
-        version: 1,
+        version: 2,
+        documentVersion: EDIT_DOCUMENT_VERSION,
+        versions: [...versions],
         id: current.id,
         originalUri: source.uri,
         createdAt: current.createdAt,
@@ -126,6 +143,7 @@ export async function pruneStoredOriginals(alsoKeep: readonly (string | null | u
   const project = parseProject(await AsyncStorage.getItem(KEY));
   const { source, present, past, future } = useEditorStore.getState();
   pruneOriginals([project?.source.uri, source?.uri, ...alsoKeep]);
-  const keep = [project?.document, present, ...past, ...future].flatMap(documentFiles);
+  const { versions } = useEditorStore.getState();
+  const keep = [project?.document, ...(project?.versions ?? []).map((v) => v.document), present, ...past, ...future, ...versions.map((v) => v.document)].flatMap(documentFiles);
   pruneMaskFiles(keep);
 }

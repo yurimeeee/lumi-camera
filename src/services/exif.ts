@@ -96,3 +96,9 @@ export function withExif(jpeg: Uint8Array, { takenAt, location }: ExifInput): Ui
     return jpeg;
   }
 }
+
+/** 상세 저장's metadata choice applied to an encoded JPEG (Skia writes none of its own). */
+export function exportMetadata(jpeg: Uint8Array, metadata: 'keep' | 'noLocation' | 'none', input: ExifInput): Uint8Array {
+  if (metadata === 'none') return jpeg;
+  return withExif(jpeg, { takenAt: input.takenAt, location: metadata === 'keep' ? input.location : null });
+}

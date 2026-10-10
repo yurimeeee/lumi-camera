@@ -17,7 +17,7 @@ import type { DetectedFace, EyeLandmarks, FaceLandmarks, Point } from '@/service
 import { faceRender, needsFaces } from '@/services/faceWarp/faceRender';
 import { buildFaceWarp, prepareFaceInputs, warpBackward, warpForward, type FaceWarpPlan } from '@/services/faceWarp/FaceWarpEngine';
 import { buildFaceRegions, prepareRegionInputs, regionRadius, regionUniforms, type Region } from '@/services/faceWarp/regions';
-import { parseProject, serializeProject } from '@/services/editProject';
+import { parseProject } from '@/services/editProject';
 import { resolveProcessing } from '@/services/imageProcessing';
 import { createEditState, useEditorStore } from '@/stores/editorStore';
 import type { FaceRetouch, Geometry, SourceImage } from '@/types/editing';
@@ -393,14 +393,15 @@ describe('per-face state', () => {
     const legacyFace: Partial<FaceRetouch> = { slim: 40, noseWing: 20 };
     const doc = { ...old, faces: { 'face-0': legacyFace }, retouch: { skin: 10, smooth: 0, tone: 0, glow: 0, detail: 0 } } as Record<string, unknown>;
     delete doc.faceAnchors;
-    const json = serializeProject({
+    // A v1 project file, as Phase 2 wrote it.
+    const json = JSON.stringify({
       version: 1,
       id: 'p',
       originalUri: SOURCE.uri,
       createdAt: 1,
       updatedAt: 1,
       source: SOURCE,
-      document: doc as unknown as ReturnType<typeof createEditState>,
+      document: doc,
     });
     const p = parseProject(json)!;
     expect(p.document.faceAnchors).toEqual({});
