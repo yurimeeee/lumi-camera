@@ -13,6 +13,7 @@ import { composeHsl } from './color/hsl';
 import { NO_FACE_WARP, type FaceWarpUniforms } from './faceWarp/FaceWarpEngine';
 import { NO_REGIONS, type RegionUniforms } from './faceWarp/regions';
 import { filmUniforms } from './film/uniforms';
+import { NO_MASKS, type MaskUniforms } from './masks/shader';
 
 /**
  * Pure, UI-independent processing math. Converts "what the user chose"
@@ -184,6 +185,7 @@ function mixUniforms(m: MixStage | null) {
  * @param faceWarp face retouch warp for this render target (see services/faceWarp)
  * @param spots  잡티 제거 spots for this render target (see spotUniforms)
  * @param regions face regions for skin tools (see services/faceWarp/regions)
+ * @param masks  selective masks + background stage (see services/masks)
  */
 export function buildUniforms(
   p: ResolvedProcessing,
@@ -192,6 +194,7 @@ export function buildUniforms(
   faceWarp: FaceWarpUniforms = NO_FACE_WARP,
   spots: SpotUniforms = NO_SPOTS,
   regions: RegionUniforms = NO_REGIONS,
+  masks: MaskUniforms = NO_MASKS,
 ): Uniforms {
   const t = p.tone;
   const n = (v: number) => v / 100;
@@ -230,6 +233,7 @@ export function buildUniforms(
     uCurvesOn: p.curves ? 1 : 0,
     ...mixUniforms(p.mix),
     ...filmUniforms(p.film),
+    ...masks,
   };
 }
 

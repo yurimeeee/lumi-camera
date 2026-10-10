@@ -11,6 +11,7 @@ import { memo } from 'react';
 
 import { curveTexture, identityCurveTexture, LUT_ROWS } from '@/services/color/curveTexture';
 import { LUT_SIZE } from '@/services/color/curves';
+import { neutralMaskAtlas } from '@/services/masks/maskRaster';
 import { neutralReshapeTextures, type ReshapeTextures } from '@/services/reshape';
 import { getLumiEffect } from '@/shaders/lumiShader';
 
@@ -42,6 +43,10 @@ interface Props {
   curves?: Float32Array | null;
   /** Filter-mix (look B) curves (ResolvedProcessing.mix.curves); null = linear. */
   mixCurves?: Float32Array | null;
+  /** Selective-mask / subject atlas (services/masks), sampled 1:1 in atlas pixels. */
+  maskAtlas?: SkImage | null;
+  /** Background stage layer over the frame (blurred photo or replacement). */
+  bgLayer?: SkImage | null;
 }
 
 /**
@@ -50,13 +55,15 @@ interface Props {
  * Always drawn at the origin (the shader's vignette/grain use local
  * coordinates); position it with a parent <Group transform>.
  */
-export const LumiLayer = memo(function LumiLayer({ image, width, height, fit = 'fill', uniforms, reshape, curves, mixCurves }: Props) {
+export const LumiLayer = memo(function LumiLayer({ image, width, height, fit = 'fill', uniforms, reshape, curves, mixCurves, maskAtlas, bgLayer }: Props) {
   if (!uniforms) {
     return <SkiaImage image={image} x={0} y={0} width={width} height={height} fit={fit} sampling={SAMPLING} />;
   }
   const rect = { x: 0, y: 0, width, height };
   const field = reshape ?? neutralReshapeTextures();
   const lut = ((curves || mixCurves) && curveTexture(curves ?? null, mixCurves ?? null)) || identityCurveTexture();
+  const atlas = maskAtlas ?? neutralMaskAtlas();
+  const bg = bgLayer ?? neutralMaskAtlas();
   return (
     <Rect x={0} y={0} width={width} height={height}>
       <Shader source={getLumiEffect()} uniforms={{ ...uniforms, uReshape: reshape ? 1 : 0 }}>
@@ -65,6 +72,8 @@ export const LumiLayer = memo(function LumiLayer({ image, width, height, fit = '
         <ImageShader image={field.y} fit="fill" rect={rect} tx="clamp" ty="clamp" sampling={FIELD_SAMPLING} />
         <ImageShader image={lut} fit="fill" rect={LUT_RECT} tx="clamp" ty="clamp" sampling={LUT_SAMPLING} />
         <ImageShader image={lowResOf(image)} fit={fit} rect={rect} tx="clamp" ty="clamp" sampling={SAMPLING} />
+        <ImageShader image={atlas} fit="fill" rect={{ x: 0, y: 0, width: atlas.width(), height: atlas.height() }} tx="clamp" ty="clamp" sampling={FIELD_SAMPLING} />
+        <ImageShader image={bg} fit="fill" rect={rect} tx="clamp" ty="clamp" sampling={FIELD_SAMPLING} />
       </Shader>
     </Rect>
   );

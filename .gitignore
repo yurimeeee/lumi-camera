@@ -48,3 +48,5 @@ public/mediapipe/
 
 # Face-warp check: downloaded test photos + Vision CLI
 .face-warp-cache/
+# ONNX Runtime Web (copied by postinstall)
+public/ort/

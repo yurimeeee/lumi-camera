@@ -146,7 +146,12 @@ function drawPattern(
   }
 }
 
-export function drawBackground(canvas: SkCanvas, doc: StudioDocument, bank: AssetBank) {
+/**
+ * Canvas background (fill, blur, brightness / saturation, opacity over white).
+ * Also draws the editor's background replacement behind a segmented subject
+ * (services/masks/backgroundLayer), with the same fills and adjustments.
+ */
+export function drawBackground(canvas: SkCanvas, doc: Pick<StudioDocument, 'width' | 'height' | 'background'>, bank: AssetBank) {
   const { width: W, height: H, background } = doc;
   const { adjust } = background;
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), fillPaint(CANVAS_BASE));

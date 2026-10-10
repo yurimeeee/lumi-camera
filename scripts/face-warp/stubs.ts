@@ -8,5 +8,7 @@ plugin({
     for (const m of ['@shopify/react-native-skia', 'expo-image-manipulator', 'react-native', 'expo-file-system']) {
       build.module(m, () => ({ exports: stub, loader: 'object' }));
     }
+    // Metro asset modules (frame kit textures, fonts) → their file path.
+    build.onLoad({ filter: /\.(png|jpe?g|ttf)$/ }, (args) => ({ exports: { default: args.path }, loader: 'object' }));
   },
 });

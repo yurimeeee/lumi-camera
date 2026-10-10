@@ -38,6 +38,9 @@ export interface SettingsState {
   stampColor: string;
   /** 50…200 % */
   stampSize: number;
+  // ── AI (Phase 4) ──
+  /** Web: on-device AI model groups the user agreed to download (`segmentation`, `inpainting`). */
+  aiModelConsent: readonly string[];
 }
 
 interface SettingsActions {
@@ -65,6 +68,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   stampPosition: DEFAULT_STAMP_STYLE.position,
   stampColor: DEFAULT_STAMP_STYLE.color,
   stampSize: DEFAULT_STAMP_STYLE.size,
+  aiModelConsent: [],
 };
 
 /** The date stamp style from Settings (format + position + colour + size). */

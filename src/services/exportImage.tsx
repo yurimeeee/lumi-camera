@@ -21,6 +21,13 @@ import { applyGeometry, EXPORT_MAX_SIDE_HQ, EXPORT_MAX_SIDE_STD, type ImageFile 
 import { buildUniforms, isIdentity, resolveProcessing } from './imageProcessing';
 import { spotUniforms } from './blemish';
 import { buildReshapeField } from './reshape';
+import { buildMaskAtlas, loadMaskImages, maskImageUris } from './masks/maskRender';
+import { sourceToOutput } from './masks/maskRaster';
+import { composeRemovals } from './inpaint/objectRemoval';
+import { backgroundBank, BG_EXPORT_SIDE, buildBackgroundLayer } from './masks/backgroundLayer';
+import { loadImageAt } from '@/image-engine/frame/FrameAssetLoader';
+import { maskUniforms, renderSlots } from './masks/shader';
+import { backgroundActive } from '@/constants/masks';
 import type { GeoPoint } from './location';
 
 export interface ExportOptions {
@@ -33,6 +40,8 @@ export interface ExportOptions {
 }
 
 const isWeb = Platform.OS === 'web';
+/** Mask atlas tile size for exports (the preview uses MASK_TILE_SIDE). */
+const EXPORT_MASK_SIDE = 2048;
 
 export async function loadSkImage(uri: string): Promise<SkImage> {
   const data = await Skia.Data.fromURI(uri);
@@ -67,9 +76,20 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const maxSide = opts.highQuality ? EXPORT_MAX_SIDE_HQ : EXPORT_MAX_SIDE_STD;
 
   const base = await applyGeometry(source, edit.geometry, maxSide);
-  const image = await loadSkImage(base.uri);
-  const width = image.width();
-  const height = image.height();
+  const decoded = await loadSkImage(base.uri);
+  const width = decoded.width();
+  const height = decoded.height();
+  // 객체 제거: the same patches the preview composites, at export size.
+  const image = edit.removals.length
+    ? composeRemovals(
+        decoded,
+        edit.removals,
+        await loadMaskImages(edit.removals.map((r) => r.patch.uri)),
+        sourceToOutput(edit.geometry, source.width, source.height, width, height),
+        source.width,
+        source.height,
+      )
+    : decoded;
 
   const processing = resolveProcessing({
     filter: getFilter(edit.filterId),
@@ -91,8 +111,35 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   const reshape = edit.reshape.length
     ? buildReshapeField(edit.reshape, edit.geometry, source.width, source.height).toTextures()
     : null;
+  // Selective masks + background stage: the same atlas the preview draws,
+  // at export mask resolution (finer edges, same shapes).
+  const slots = renderSlots(edit.masks, null);
+  const bg = backgroundActive(edit.background) ? edit.background : null;
+  const maskImages = await loadMaskImages(maskImageUris(slots, bg));
+  const atlas =
+    slots.length || bg
+      ? buildMaskAtlas(slots, bg, { geometry: edit.geometry, srcW: source.width, srcH: source.height, images: maskImages }, null, EXPORT_MASK_SIDE)
+      : null;
+  const subjectImage = bg?.subject ? maskImages.get(bg.subject.uri) : undefined;
+  const bgLayer =
+    bg && bg.mode !== 'none' && subjectImage
+      ? buildBackgroundLayer({
+          base: image,
+          background: bg,
+          geometry: edit.geometry,
+          srcW: source.width,
+          srcH: source.height,
+          subject: subjectImage,
+          side: Math.min(BG_EXPORT_SIDE, Math.max(width, height)),
+          bank: await backgroundBank(bg, (ref) => loadImageAt(ref, Math.max(width, height)).catch(() => null)),
+        })
+      : null;
+  const masksAll = maskUniforms(slots, atlas, null, bg);
+  // A background mode whose layer could not be built renders as no change (never the empty child).
+  const masks = bgLayer || masksAll.uBg[0] === 0 ? masksAll : { ...masksAll, uBg: [0, 0, masksAll.uBg[2]!, masksAll.uBg[3]!] };
+  const maskActive = masks.uMaskCount > 0 || masks.uBgEdge[2] === 1;
   const uniforms =
-    isIdentity(processing) && !reshape && edit.spots.length === 0 && !face.active
+    isIdentity(processing) && !reshape && edit.spots.length === 0 && !face.active && !maskActive
       ? null
       : buildUniforms(
           processing,
@@ -101,6 +148,7 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
           face.warp,
           spotUniforms(edit.spots, edit.geometry, source, width, height),
           face.regions,
+          masks,
         );
   const date = stampDateOf(source, edit);
   const stamp = edit.dateStamp && opts.stampTypeface && date !== null ? formatDateStamp(date, edit.stamp.format) : null;
@@ -124,6 +172,8 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
           reshape={reshape}
           curves={processing.curves}
           mixCurves={processing.mix?.curves ?? null}
+          maskAtlas={atlas?.image ?? null}
+          bgLayer={bgLayer}
         />
         {stamp && opts.stampTypeface ? (
           <DateStampLayer
@@ -144,6 +194,8 @@ export async function renderEdit(source: SourceImage, edit: EditState, opts: Exp
   );
   reshape?.x.dispose();
   reshape?.y.dispose();
+  atlas?.image.dispose();
+  bgLayer?.dispose();
   if (!rendered) throw new Error('사진을 렌더링하지 못했어요.');
 
   const raster = rendered.makeNonTextureImage() ?? rendered;

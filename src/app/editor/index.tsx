@@ -14,6 +14,8 @@ import { EditorToolbar } from '@/components/editor/EditorToolbar';
 import { EffectsPanel } from '@/components/editor/FilmPanel';
 import { FramePanel } from '@/components/editor/FramePanel';
 import { AdjustMenu, CropPanel, DEFAULT_BRUSH, FilterPanel, toBrush, TouchPanel } from '@/components/editor/panels';
+import { DEFAULT_SELECTIVE_UI, maskToolOf, type SelectiveUi } from '@/components/editor/maskTool';
+import { DEFAULT_REMOVAL_UI, tapSelection, type RemovalUi } from '@/components/editor/RemovalPanel';
 import { RetouchPanel } from '@/components/editor/RetouchPanel';
 import { useOpenStudioFromEditor } from '@/features/frame-studio/hooks/useOpenStudioFromEditor';
 import { aspectRatioOf } from '@/constants/crop';
@@ -25,8 +27,12 @@ import { needsFaces } from '@/services/faceWarp/faceRender';
 import { sourceToFrame } from '@/services/frameCoords';
 import { usePreviewImage } from '@/hooks/usePreviewImage';
 import { useSaveEdit } from '@/hooks/useSaveEdit';
+import { useRemovalBase } from '@/hooks/useRemovalBase';
 import { useWorkingImage } from '@/hooks/useWorkingImage';
+import { showToast } from '@/stores/toastStore';
 import { DATE_STAMP_FONT } from '@/render/DateStampLayer';
+import { readSmallPixels } from '@/render/readPixels';
+import type { NormalizedPoint } from '@/types/editing';
 import { lookOf, useCanRedo, useCanUndo, useEditorStore } from '@/stores/editorStore';
 import { useLastLookStore } from '@/stores/lastLookStore';
 import { confirmAction } from '@/utils/dialogs';
@@ -53,7 +59,7 @@ export default function EditorScreen() {
 
   const cropping = tool === 'crop';
   // While cropping, show the whole (rotated/flipped) frame with the crop as an overlay.
-  const displayGeometry = cropping ? { ...geometry, crop: null } : geometry;
+  const displayGeometry = useMemo(() => (cropping ? { ...geometry, crop: null } : geometry), [cropping, geometry]);
   const working = useWorkingImage(source, displayGeometry);
   const thumbImage = usePreviewImage(source?.uri);
   // Detect as soon as the retouch panel opens so the face tools respond right
@@ -83,6 +89,36 @@ export default function EditorScreen() {
       : 'L';
   const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null);
   const [debugLandmarks, setDebugLandmarks] = useState(false);
+  const [selective, setSelective] = useState<SelectiveUi>(DEFAULT_SELECTIVE_UI);
+  const selectiveOpen = tool === 'adjust' && nav.adjust === 'selective';
+  const selectedMaskKind = useEditorStore((s) => s.present.masks.find((m) => m.id === selective.maskId)?.shape.kind ?? null);
+  const maskTool = selectiveOpen ? maskToolOf(selective, selectedMaskKind) : null;
+  // 객체 제거: selection + pending result (shown before it becomes an edit).
+  const [removal, setRemoval] = useState<RemovalUi>(DEFAULT_REMOVAL_UI);
+  const removing = tool === 'touch' && brush.mode === 'remove';
+  const removals = useEditorStore((s) => s.present.removals);
+  const shownRemovals = useMemo(() => (removal.pending && removing ? [...removals, removal.pending] : removals), [removals, removal.pending, removing]);
+  const baseImage = useRemovalBase(working?.image ?? null, shownRemovals, displayGeometry, source);
+  const removalTool = useMemo(
+    () =>
+      removing && !removal.pending
+        ? {
+            mode: removal.mode,
+            size: removal.size,
+            selection: removal.selection,
+            onSelection: (selection: RemovalUi['selection']) => setRemoval((r) => ({ ...r, selection })),
+            onTap: (pt: NormalizedPoint) => {
+              tapSelection(pt)
+                .then((selection) => {
+                  if (selection) setRemoval((r) => ({ ...r, selection }));
+                  else showToast('물체를 찾지 못했어요. 브러시로 칠해 보세요');
+                })
+                .catch(() => showToast('물체를 찾지 못했어요'));
+            },
+          }
+        : null,
+    [removing, removal.mode, removal.size, removal.selection, removal.pending],
+  );
   const typeface = useTypeface(DATE_STAMP_FONT);
   const { save, saving } = useSaveEdit(typeface);
   const studio = useOpenStudioFromEditor(typeface);
@@ -118,6 +154,33 @@ export default function EditorScreen() {
     setBrush((b) => ({ ...b, mode: 'spot' }));
     setTool('touch');
   };
+
+  /** Colour-range masks: the colour under a tap (3×3 average of the photo as shown). */
+  const pickMaskColor = useCallback(
+    (pt: NormalizedPoint) => {
+      const id = selective.maskId;
+      if (!working || !id) return;
+      const px = readSmallPixels(working.image, 512);
+      if (!px) return;
+      const f = sourceToFrame(pt, displayGeometry);
+      const cx = Math.round(f.x * (px.width - 1));
+      const cy = Math.round(f.y * (px.height - 1));
+      const sum = [0, 0, 0];
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const x = Math.min(px.width - 1, Math.max(0, cx + dx));
+          const y = Math.min(px.height - 1, Math.max(0, cy + dy));
+          const i = (y * px.width + x) * 4;
+          for (let c = 0; c < 3; c++) sum[c]! += px.data[i + c]!;
+          n++;
+        }
+      }
+      const color = [sum[0]! / n / 255, sum[1]! / n / 255, sum[2]! / n / 255] as const;
+      useEditorStore.getState().editMask(id, (m) => (m.shape.kind === 'color' ? { ...m, shape: { ...m.shape, color, at: pt } } : m));
+    },
+    [selective.maskId, working, displayGeometry],
+  );
 
   const onSave = async () => {
     if (await save()) setSavedAt(useEditorStore.getState().past.length);
@@ -201,6 +264,10 @@ export default function EditorScreen() {
               focus={focus}
               autoFrame={tool === 'portrait'}
               showFrame={!cropping}
+              maskTool={maskTool}
+              onMaskTap={pickMaskColor}
+              baseImage={baseImage}
+              removalTool={removalTool}
             />
             {cropping && fitted ? (
               <View style={[styles.cropLayer, { width: fitted.width, height: fitted.height, left: (box.width - fitted.width) / 2, top: (box.height - fitted.height) / 2 }]}>
@@ -230,7 +297,15 @@ export default function EditorScreen() {
               onTabChange={navTo('filterTab')}
             />
           ) : null}
-          {tool === 'adjust' ? <AdjustMenu view={nav.adjust} onViewChange={navTo('adjust')} /> : null}
+          {tool === 'adjust' ? (
+            <AdjustMenu
+              view={nav.adjust}
+              onViewChange={navTo('adjust')}
+              image={working?.image ?? null}
+              selective={selective}
+              onSelectiveChange={setSelective}
+            />
+          ) : null}
           {tool === 'portrait' ? (
             <RetouchPanel
               faceStatus={faceStatus}
@@ -246,7 +321,7 @@ export default function EditorScreen() {
               onCategoryChange={navTo('portrait')}
             />
           ) : null}
-          {tool === 'touch' ? <TouchPanel brush={brush} onChange={setBrush} /> : null}
+          {tool === 'touch' ? <TouchPanel brush={brush} onChange={setBrush} removal={removal} onRemovalChange={setRemoval} /> : null}
           {tool === 'effects' ? <EffectsPanel view={nav.effects} onViewChange={navTo('effects')} /> : null}
           {tool === 'frame' ? (
             <FramePanel view={nav.frame} onViewChange={navTo('frame')} onOpenStudio={studio.open} opening={studio.opening} />

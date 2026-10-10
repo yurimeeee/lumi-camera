@@ -44,8 +44,22 @@ export function flatten(values: Record<string, number | number[]>): Float32Array
   return flat;
 }
 
+export interface ExtraChildren {
+  /** Mask atlas (RGB planes, see services/masks/maskRaster), sampled 1:1 like the app. */
+  maskAtlas?: Pixels;
+  /** Background layer over the frame (premultiplied RGBA). */
+  bgLayer?: Pixels;
+  /** Replaces the photo the shader reads (e.g. with object-removal patches composited). */
+  image?: Pixels;
+}
+
 /** Runs the Lumi shader over `src` with `p` (resolution = the source size). */
-export function renderLumi(src: Pixels, p: ResolvedProcessing, overrides: Record<string, number | number[]> = {}): Pixels {
+export function renderLumi(
+  src: Pixels,
+  p: ResolvedProcessing,
+  overrides: Record<string, number | number[]> = {},
+  extra: ExtraChildren = {},
+): Pixels {
   const { width: W, height: H } = src;
   const values = { ...buildUniforms(p, W, H), uReshape: 0, ...overrides } as Record<string, number | number[]>;
   const img = image(src);
@@ -59,7 +73,18 @@ export function renderLumi(src: Pixels, p: ResolvedProcessing, overrides: Record
   const lowShader = lowImg.makeShaderCubic(CK.TileMode.Clamp, CK.TileMode.Clamp, 1 / 3, 1 / 3, CK.Matrix.scaled(W / low.width, H / low.height));
   const nearest = (i: { makeShaderOptions: (...a: unknown[]) => unknown }) =>
     i.makeShaderOptions(CK.TileMode.Clamp, CK.TileMode.Clamp, CK.FilterMode.Nearest, CK.MipmapMode.None);
-  const shader = effect.makeShaderWithChildren(flatten(values), [nearest(img), nearest(neutral), nearest(neutral), nearest(lut), lowShader]);
+  // B-spline cubic (B = 1, C = 0), as LumiLayer samples masks and the background layer.
+  const black = CK.MakeImage({ width: 1, height: 1, ...INFO, alphaType: CK.AlphaType.Opaque }, new Uint8Array([0, 0, 0, 255]), 4);
+  const atlasImg = extra.maskAtlas ? image(extra.maskAtlas) : black;
+  const atlas = atlasImg.makeShaderCubic(CK.TileMode.Clamp, CK.TileMode.Clamp, 1, 0, CK.Matrix.identity());
+  const bgImg = extra.bgLayer
+    ? CK.MakeImage({ width: extra.bgLayer.width, height: extra.bgLayer.height, ...INFO, alphaType: CK.AlphaType.Premul }, extra.bgLayer.data, extra.bgLayer.width * 4)
+    : black;
+  const bgW = extra.bgLayer?.width ?? 1;
+  const bgH = extra.bgLayer?.height ?? 1;
+  const bg = bgImg.makeShaderCubic(CK.TileMode.Clamp, CK.TileMode.Clamp, 1, 0, CK.Matrix.scaled(W / bgW, H / bgH));
+  const photo = extra.image ? image(extra.image) : img;
+  const shader = effect.makeShaderWithChildren(flatten(values), [nearest(photo), nearest(neutral), nearest(neutral), nearest(lut), lowShader, atlas, bg]);
   const surface = CK.MakeSurface(W, H);
   const paint = new CK.Paint();
   paint.setShader(shader);
@@ -71,6 +96,10 @@ export function renderLumi(src: Pixels, p: ResolvedProcessing, overrides: Record
   neutral.delete();
   lut.delete();
   lowImg.delete();
+  black.delete();
+  if (extra.maskAtlas) atlasImg.delete();
+  if (extra.bgLayer) bgImg.delete();
+  if (extra.image) photo.delete();
   return { width: W, height: H, data };
 }
 

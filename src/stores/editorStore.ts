@@ -4,11 +4,14 @@ import { DEFAULT_ADJUSTMENTS, DEFAULT_RETOUCH } from '@/constants/adjustments';
 import { completeFaceRetouch, DEFAULT_FACE_RETOUCH, isNeutralFace } from '@/constants/faceRetouch';
 import { completeFilm, completeFrame, DEFAULT_FILM, DEFAULT_STAMP_STYLE, NO_FRAME } from '@/constants/film';
 import { aspectRatioOf } from '@/constants/crop';
+import { completeBackground, completeMask } from '@/constants/masks';
 import { DEFAULT_FILTER_INTENSITY, ORIGINAL_FILTER_ID } from '@/constants/filters';
 import { DEFAULT_CURVES } from '@/services/color/curves';
 import { DEFAULT_HSL } from '@/services/color/hsl';
+import { applyAutoShare } from '@/services/autoEnhance';
 import { centeredCrop, rotatedSize } from '@/services/imagePipeline';
 import type { DateStampStyle, FilmEffects, FilterMix, FrameSettings } from '@/types/film';
+import type { AutoValues, BackgroundEdit, ImageStats, MaskStroke, ObjectRemoval, SelectiveMask } from '@/types/phase4';
 import type {
   AdjustmentKey,
   Adjustments,
@@ -74,6 +77,11 @@ export function createEditState(partial?: Partial<EditState>): EditState {
     ...(partial?.film ? { film: completeFilm(partial.film) } : null),
     ...(partial?.frame ? { frame: completeFrame(partial.frame) } : null),
     ...(partial?.stamp ? { stamp: { ...DEFAULT_STAMP_STYLE, ...partial.stamp } } : null),
+    // Phase 4 fields: null/undefined in older documents.
+    autoEnhance: partial?.autoEnhance ?? null,
+    masks: (partial?.masks ?? []).map(completeMask),
+    removals: partial?.removals ?? [],
+    background: completeBackground(partial?.background),
   } as EditState;
 }
 
@@ -185,6 +193,38 @@ interface EditorActions {
   setCrop: (crop: NormalizedRect | null) => void;
   setDateStamp: (on: boolean) => void;
 
+  /** Auto Enhance: adds the suggestion (at the current strength, 100 the first time). One undo step. */
+  runAutoEnhance: (suggested: AutoValues, stats: ImageStats) => void;
+  /** Auto strength 0…100 (live; `commit()` on release). Manual edits made since stay. */
+  setAutoStrength: (strength: number) => void;
+  /** Removes Auto's share of the adjustments. One undo step. */
+  clearAutoEnhance: () => void;
+  /** Drops uncommitted live changes (e.g. a press-and-hold comparison). */
+  revertLive: () => void;
+
+  // ── 선택 보정 masks ──
+  /** Adds a mask on top (one undo step). */
+  addMask: (mask: SelectiveMask) => void;
+  /** Live change to one mask (`commit()` when the gesture / slider ends). */
+  setMask: (id: string, fn: (m: SelectiveMask) => SelectiveMask) => void;
+  /** Discrete change to one mask (one undo step). */
+  editMask: (id: string, fn: (m: SelectiveMask) => SelectiveMask) => void;
+  removeMask: (id: string) => void;
+  /** Copies a mask right above the original; returns the copy's id. */
+  duplicateMask: (id: string, newId: string, name: string) => void;
+  /** Brush on a mask: live while dragging, `commit()` on release (one undo step per stroke). */
+  beginMaskStroke: (id: string, stroke: Omit<MaskStroke, 'id'>) => void;
+  extendMaskStroke: (id: string, point: MaskStroke['points'][number]) => void;
+
+  // ── 객체 제거 / 배경 ──
+  addRemoval: (removal: ObjectRemoval) => void;
+  removeRemoval: (id: string) => void;
+  clearRemovals: () => void;
+  /** Live background change (`commit()` on release). */
+  setBackground: (fn: (b: BackgroundEdit) => BackgroundEdit) => void;
+  /** Discrete background change (one undo step). */
+  editBackground: (fn: (b: BackgroundEdit) => BackgroundEdit) => void;
+
   undo: () => void;
   redo: () => void;
 }
@@ -219,7 +259,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     open: (source, partial) => {
       const state = createEditState(partial);
       // Restored edits keep their ids; new strokes/spots must not collide.
-      for (const item of [...state.reshape, ...state.spots]) nextStrokeId = Math.max(nextStrokeId, item.id + 1);
+      for (const item of [...state.reshape, ...state.spots, ...state.masks.flatMap((m) => m.strokes)]) nextStrokeId = Math.max(nextStrokeId, item.id + 1);
       set({ source, present: state, committed: state, past: [], future: [], restored: false });
     },
     close: () => set(initial),
@@ -368,6 +408,80 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     setAspect: (aspect, crop) => update((s) => ({ ...s, geometry: { ...s.geometry, aspect, crop } })),
     setCrop: (crop) => update((s) => ({ ...s, geometry: { ...s.geometry, crop } })),
     setDateStamp: (dateStamp) => update((s) => ({ ...s, dateStamp })),
+
+    runAutoEnhance: (suggested, stats) =>
+      update((s) => {
+        const prev = s.autoEnhance;
+        const strength = prev?.strength ?? 100;
+        const { adjustments, applied } = applyAutoShare(s.adjustments, prev?.applied ?? {}, suggested, strength);
+        return { ...s, adjustments, autoEnhance: { suggested, applied, strength, stats }, recipeId: null };
+      }),
+    setAutoStrength: (strength) =>
+      set((st) => {
+        const auto = st.present.autoEnhance;
+        if (!auto || auto.strength === strength) return st;
+        const { adjustments, applied } = applyAutoShare(st.present.adjustments, auto.applied, auto.suggested, strength);
+        return { present: { ...st.present, adjustments, autoEnhance: { ...auto, applied, strength } } };
+      }),
+    clearAutoEnhance: () => {
+      const auto = get().present.autoEnhance;
+      if (!auto) return;
+      update((s) => ({ ...s, adjustments: applyAutoShare(s.adjustments, auto.applied, {}, 0).adjustments, autoEnhance: null }));
+    },
+    revertLive: () => set((s) => (s.present === s.committed ? s : { present: s.committed })),
+
+    addMask: (mask) => update((s) => ({ ...s, masks: [...s.masks, mask] })),
+    setMask: (id, fn) =>
+      set((st) => {
+        const masks = st.present.masks.map((m) => (m.id === id ? fn(m) : m));
+        return { present: { ...st.present, masks } };
+      }),
+    editMask: (id, fn) => {
+      if (!get().present.masks.some((m) => m.id === id)) return;
+      update((s) => ({ ...s, masks: s.masks.map((m) => (m.id === id ? fn(m) : m)) }));
+    },
+    removeMask: (id) => {
+      if (!get().present.masks.some((m) => m.id === id)) return;
+      update((s) => ({ ...s, masks: s.masks.filter((m) => m.id !== id) }));
+    },
+    duplicateMask: (id, newId, name) =>
+      update((s) => {
+        const i = s.masks.findIndex((m) => m.id === id);
+        if (i < 0) return s;
+        const copy: SelectiveMask = { ...s.masks[i]!, id: newId, name, strokes: [...s.masks[i]!.strokes], adjust: { ...s.masks[i]!.adjust } };
+        return { ...s, masks: [...s.masks.slice(0, i + 1), copy, ...s.masks.slice(i + 1)] };
+      }),
+    beginMaskStroke: (id, stroke) =>
+      set((st) => ({
+        present: {
+          ...st.present,
+          masks: st.present.masks.map((m) => (m.id === id ? { ...m, strokes: [...m.strokes, { ...stroke, id: nextStrokeId++ }] } : m)),
+        },
+      })),
+    extendMaskStroke: (id, point) =>
+      set((st) => ({
+        present: {
+          ...st.present,
+          masks: st.present.masks.map((m) => {
+            if (m.id !== id) return m;
+            const last = m.strokes[m.strokes.length - 1];
+            if (!last) return m;
+            return { ...m, strokes: [...m.strokes.slice(0, -1), { ...last, points: [...last.points, point] }] };
+          }),
+        },
+      })),
+
+    addRemoval: (removal) => update((s) => ({ ...s, removals: [...s.removals, removal] })),
+    removeRemoval: (id) => {
+      if (!get().present.removals.some((r) => r.id === id)) return;
+      update((s) => ({ ...s, removals: s.removals.filter((r) => r.id !== id) }));
+    },
+    clearRemovals: () => {
+      if (get().present.removals.length === 0) return;
+      update((s) => ({ ...s, removals: [] }));
+    },
+    setBackground: (fn) => set((st) => ({ present: { ...st.present, background: fn(st.present.background) } })),
+    editBackground: (fn) => update((s) => ({ ...s, background: fn(s.background) })),
 
     undo: () => {
       const { past, present, future } = get();

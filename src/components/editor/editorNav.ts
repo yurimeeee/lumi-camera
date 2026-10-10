@@ -5,8 +5,8 @@ import type { LookTab } from '@/types/filters';
 export type EditorTool = 'filter' | 'adjust' | 'portrait' | 'touch' | 'effects' | 'frame' | 'crop';
 
 export type FilterView = 'presets' | 'mix' | 'recipes';
-export type AdjustView = 'basic' | 'hsl' | 'curves';
-export type EffectsView = 'film' | 'grain' | 'leak' | 'bloom';
+export type AdjustView = 'basic' | 'hsl' | 'curves' | 'selective';
+export type EffectsView = 'film' | 'grain' | 'leak' | 'bloom' | 'background';
 export type FrameView = 'frames' | 'layouts' | 'background' | 'decorate';
 
 /**
@@ -43,6 +43,7 @@ export const ADJUST_VIEWS: readonly { value: AdjustView; label: string }[] = [
   { value: 'basic', label: '기본' },
   { value: 'hsl', label: 'HSL' },
   { value: 'curves', label: '커브' },
+  { value: 'selective', label: '선택 보정' },
 ];
 
 export const EFFECTS_VIEWS: readonly { value: EffectsView; label: string }[] = [
@@ -50,6 +51,7 @@ export const EFFECTS_VIEWS: readonly { value: EffectsView; label: string }[] = [
   { value: 'grain', label: '그레인' },
   { value: 'leak', label: '빛샘' },
   { value: 'bloom', label: 'Bloom' },
+  { value: 'background', label: '배경' },
 ];
 
 export const FRAME_VIEWS: readonly { value: FrameView; label: string }[] = [

@@ -309,7 +309,7 @@ if (effect) {
     }
     const coords = CK.MakeImage({ width: W, height: H, ...info }, px, W * 4);
     const n = neutral.makeShaderCubic(CK.TileMode.Clamp, CK.TileMode.Clamp, 1, 0);
-    const shader = effect.makeShaderWithChildren(flat, [coords.makeShaderOptions(CK.TileMode.Clamp, CK.TileMode.Clamp, CK.FilterMode.Nearest, CK.MipmapMode.None), n, n, n, n]);
+    const shader = effect.makeShaderWithChildren(flat, [coords.makeShaderOptions(CK.TileMode.Clamp, CK.TileMode.Clamp, CK.FilterMode.Nearest, CK.MipmapMode.None), n, n, n, n, n, n]);
     const surface = CK.MakeSurface(W, H);
     const paint = new CK.Paint();
     paint.setShader(shader);

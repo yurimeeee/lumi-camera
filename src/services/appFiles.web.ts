@@ -43,3 +43,18 @@ export function writeRecipeThumbnail(_id: string, jpeg: Uint8Array): string {
 }
 
 export function deleteFileQuietly(_uri: string | null | undefined): void {}
+
+/** Web has no file system: masks and patches are stored inline as data URLs. */
+export function newMaskFileUri(_prefix: string): string {
+  throw new Error('No mask files on web');
+}
+
+export function writeMaskPng(bytes: Uint8Array, _prefix: string): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
+  }
+  return `data:image/png;base64,${btoa(bin)}`;
+}
+
+export function pruneMaskFiles(_keep: readonly (string | null | undefined)[]): void {}
