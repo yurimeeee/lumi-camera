@@ -17,6 +17,7 @@ import { lowResOf } from '@/render/lowRes';
 import { curveTexture, identityCurveTexture } from '@/services/color/curveTexture';
 import { buildUniforms, isIdentity, resolveProcessing } from '@/services/imageProcessing';
 import { neutralReshapeTextures } from '@/services/reshape';
+import { neutralMaskAtlas } from '@/services/masks/maskRaster';
 import { getLumiEffect } from '@/shaders/lumiShader';
 
 import type { AssetBank } from './bank';
@@ -93,12 +94,16 @@ export function drawLookImage(canvas: SkCanvas, image: SkImage, dw: number, dh: 
   const field = neutralReshapeTextures();
   const lut = ((p.curves || p.mix?.curves) && curveTexture(p.curves, p.mix?.curves ?? null)) || identityCurveTexture();
   const low = lowResOf(image);
+  const noMasks = neutralMaskAtlas();
   const children = [
     image.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, CUBIC.B, CUBIC.C, fit(image)),
     field.x.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, 1, 0, fit(field.x)),
     field.y.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, 1, 0, fit(field.y)),
     lut.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, 0, 0),
     low.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, CUBIC.B, CUBIC.C, fit(low)),
+    // No masks / background stage in Frame Studio slots.
+    noMasks.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, 1, 0),
+    noMasks.makeShaderCubic(TileMode.Clamp, TileMode.Clamp, 1, 0),
   ];
   paint.setShader(effect.makeShaderWithChildren(uniforms, children));
   canvas.drawRect(Skia.XYWHRect(0, 0, dw, dh), paint);

@@ -24,6 +24,7 @@ import type { AdjustmentKey } from '@/types/editing';
 import type { FilmEffects } from '@/types/film';
 import { DATE_FORMATS, formatDateStamp, stampDateOf } from '@/utils/dateStamp';
 
+import { BackgroundEditPanel } from './BackgroundEditPanel';
 import { EFFECTS_VIEWS, type EffectsView } from './editorNav';
 import { SubTabs } from './SubTabs';
 
@@ -79,6 +80,9 @@ export function EffectsPanel({ view, onViewChange }: { view: EffectsView; onView
 
   let body: ReactNode = null;
   switch (view) {
+    case 'background':
+      body = <BackgroundEditPanel />;
+      break;
     case 'film':
       body = (
         <Scroll>

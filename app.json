@@ -70,7 +70,8 @@
           "imageWidth": 120,
           "backgroundColor": "#F7F4EF"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

@@ -15,6 +15,7 @@ import { flattenUniforms, uniformSlot } from '@/render/uniformLayout';
 import { curveTexture, identityCurveTexture } from '@/services/color/curveTexture';
 import { buildUniforms } from '@/services/imageProcessing';
 import { neutralReshapeTextures } from '@/services/reshape';
+import { neutralMaskAtlas } from '@/services/masks/maskRaster';
 import { getLumiEffect } from '@/shaders/lumiShader';
 
 import type { LiveCameraHandle, LiveCameraProps } from './liveCamera.types';
@@ -57,6 +58,7 @@ export function SkiaLiveCamera({
   const lut = useSharedValue<SkImage | null>(null);
   const neutral = neutralReshapeTextures();
   const identityLut = identityCurveTexture();
+  const noMasks = neutralMaskAtlas();
 
   useEffect(() => {
     if (!look) {
@@ -113,6 +115,9 @@ export function SkiaLiveCamera({
         // Bloom/halation read a low-resolution copy; preview-sized frames are
         // read directly (a few more samples, no extra pass per frame).
         frameTexture.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None),
+        // Mask atlas + background layer: unused by camera looks.
+        noMasks.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None),
+        noMasks.makeShaderOptions(TileMode.Clamp, TileMode.Clamp, FilterMode.Nearest, MipmapMode.None),
       ];
       const paint = Skia.Paint();
       paint.setShader(effect.makeShaderWithChildren(values, children));

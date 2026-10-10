@@ -265,7 +265,7 @@ describe('edit project', () => {
       curves: { ...DEFAULT_CURVES, blue: [{ x: 0, y: 0.05 }, { x: 1, y: 1 }] },
       spots: [{ id: 7, x: 0.4, y: 0.5, radius: 0.01 }],
     });
-    const project: EditProject = { version: 1, id: 'p1', originalUri: SOURCE.uri, createdAt: 1, updatedAt: 2, source: SOURCE, document: doc };
+    const project: EditProject = { version: 2, documentVersion: 2, id: 'p1', originalUri: SOURCE.uri, createdAt: 1, updatedAt: 2, source: SOURCE, document: doc, versions: [] };
     const back = parseProject(serializeProject(project))!;
     expect(back.document).toEqual(doc);
     expect(back.source.uri).toBe(SOURCE.uri);

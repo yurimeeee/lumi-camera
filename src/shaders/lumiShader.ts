@@ -5,6 +5,7 @@ import { HSL_CENTERS, HSL_MAX_HUE_SHIFT } from '@/services/color/hsl';
 import { REGION_SKSL } from '@/services/faceWarp/regions';
 import { FILM_SKSL } from '@/services/film/shader';
 import { FACE_WARP_SKSL } from '@/services/faceWarp/shader';
+import { MASK_SKSL } from '@/services/masks/shader';
 import { RESHAPE_RANGE } from '@/services/reshape';
 
 /**
@@ -13,7 +14,8 @@ import { RESHAPE_RANGE } from '@/services/reshape';
  * Order of operations:
  *   face warp → lens fringing → retouch (skin-tone masked, face features
  *   protected) → face region tools (dark circle, wrinkle, redness, teeth,
- *   eyes) → local detail → flash →
+ *   eyes) → local detail → background (subject segmentation: blur /
+ *   replace) → selective masks → flash →
  *   look A: exposure/brightness → white balance → highlights/shadows →
  *     contrast → saturation/vibrance → HSL → split tone → curves (LUT row 0)
  *   look B (filter mix, same stage with its own values, LUT row 1) →
@@ -269,6 +271,8 @@ float3 lookStage(float3 c, float4 p0, float4 p1, float4 p2, float3 shT, float3 h
   if (curvesOn > 0.5) c = applyCurves(c, stage);
   return c;
 }
+
+${MASK_SKSL}
 float decode16(half4 c) {
   return (float(c.r) * 65280.0 + float(c.g) * 255.0) / 65535.0;
 }
@@ -409,6 +413,10 @@ half4 main(float2 pos) {
     }
   }
 
+  // ── Background (subject segmentation) and selective masks ──
+  if (uBgEdge.z > 0.5) c = applyBackground(c, xy);
+  if (uMaskCount > 0.0) c = applyMasks(c, src, xy);
+
   float2 uv = pos / uResolution;
   float2 aspect = uResolution / min(uResolution.x, uResolution.y);
   if (filmOn > 0.5 && uFilm[5].w > 0.0) c = filmFlash(uv, aspect, c);
@@ -451,6 +459,8 @@ half4 main(float2 pos) {
       c += v * (-uVignette) * 0.35 * (1.0 - c);
     }
   }
+
+  if (uMaskOverlay > -0.5) c = maskOverlay(clamp(c, 0.0, 1.0), src, xy);
 
   return half4(half3(clamp(c, 0.0, 1.0)), 1.0);
 }

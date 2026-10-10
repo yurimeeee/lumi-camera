@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Canvas, Group, Rect, rect, rrect, type SkTypeface } from '@shopify/react-native-skia';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { Canvas, Circle, ColorMatrix, Group, Image as SkiaImage, Path, Rect, rect, rrect, Skia, type SkImage, type SkTypeface } from '@shopify/react-native-skia';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -15,6 +15,10 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { getFilter } from '@/constants/filters';
 import { colors, radius, typography } from '@/constants/theme';
+import { useBackgroundLayer } from '@/hooks/useBackgroundLayer';
+import { useMaskRender } from '@/hooks/useMaskRender';
+import { loadMaskImages } from '@/services/masks/maskRender';
+import { sourceToOutput } from '@/services/masks/maskRaster';
 import { useReshapeField } from '@/hooks/useReshapeField';
 import type { WorkingImage } from '@/hooks/useWorkingImage';
 import { useZoom } from '@/hooks/useZoom';
@@ -30,7 +34,10 @@ import { frameSize, frameToSource, sourceToFrame } from '@/services/reshape';
 import { useEditorStore } from '@/stores/editorStore';
 import { MAX_SPOTS, spotUniforms } from '@/services/blemish';
 import { showToast } from '@/stores/toastStore';
-import type { Geometry, NormalizedRect, SourceImage } from '@/types/editing';
+import type { Geometry, NormalizedPoint, NormalizedRect, SourceImage } from '@/types/editing';
+import type { MaskShape } from '@/types/phase4';
+
+import { dragShape, ellipseOutline, hitHandle, maskBrushRadius, shapeHandles, type MaskTool, type RemovalTool, type ShapeHandle } from './maskTool';
 import { formatDateStamp, stampDateOf } from '@/utils/dateStamp';
 
 interface Props {
@@ -66,6 +73,14 @@ interface Props {
   focus: NormalizedRect | null;
   /** A tool that frames features is open; entering it re-arms framing (unless the user is zoomed in). */
   autoFrame: boolean;
+  /** 선택 보정: the mask being edited (brush / handles / colour pick); null when no mask tool is open. */
+  maskTool?: MaskTool | null;
+  /** Colour-range masks: a tap on the photo (source-normalised). */
+  onMaskTap?: (point: NormalizedPoint) => void;
+  /** Photo the shader reads (object-removal patches composited); defaults to `working.image`. */
+  baseImage?: SkImage | null;
+  /** 객체 제거: marking what to remove (brush / lasso / tap). */
+  removalTool?: RemovalTool | null;
 }
 
 export interface Brush {
@@ -111,6 +126,10 @@ export const EditorCanvas = memo(function EditorCanvas({
   focus,
   autoFrame,
   showFrame,
+  maskTool = null,
+  onMaskTap,
+  baseImage,
+  removalTool = null,
 }: Props) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
@@ -127,6 +146,9 @@ export const EditorCanvas = memo(function EditorCanvas({
   const stampStyle = useEditorStore((s) => s.present.stamp);
   const stampDate = useEditorStore((s) => stampDateOf(s.source, s.present));
   const frameState = useEditorStore((s) => s.present.frame);
+  const masks = useEditorStore((s) => s.present.masks);
+  const background = useEditorStore((s) => s.present.background);
+  const editedMask = useEditorStore((s) => (maskTool ? s.present.masks.find((m) => m.id === maskTool.maskId) : undefined)) ?? null;
 
   // The frame (if any) fits the box; the photo sits inside it at its own aspect.
   const frame = showFrame ? frameState : null;
@@ -191,10 +213,25 @@ export const EditorCanvas = memo(function EditorCanvas({
     () => resolveProcessing({ filter: getFilter(filterId), intensity, mix, adjustments, retouch, hsl, curves, film }),
     [filterId, intensity, mix, adjustments, retouch, hsl, curves, film],
   );
+  const maskRender = useMaskRender(masks, background, maskTool?.overlay ? maskTool.maskId : null, geometry, source);
+  const bgLayer = useBackgroundLayer(baseImage ?? working.image, background, geometry, source);
+  // Until the layer is ready, show the background unblurred / unreplaced (never the empty child).
+  const maskUniformsNow = useMemo(
+    () => (bgLayer || maskRender.uniforms.uBg[0] === 0 ? maskRender.uniforms : { ...maskRender.uniforms, uBg: [0, 0, maskRender.uniforms.uBg[2]!, maskRender.uniforms.uBg[3]!] }),
+    [bgLayer, maskRender.uniforms],
+  );
   const uniforms = useMemo(() => {
-    if (isIdentity(processing) && !reshape && spots.length === 0 && !face.active) return null;
-    return buildUniforms(processing, width, height, face.warp, spotUniforms(spots, geometry, source, width, height), face.regions);
-  }, [processing, width, height, face, reshape, spots, geometry, source]);
+    if (isIdentity(processing) && !reshape && spots.length === 0 && !face.active && !maskRender.active && !baseImage) return null;
+    return buildUniforms(
+      processing,
+      width,
+      height,
+      face.warp,
+      spotUniforms(spots, geometry, source, width, height),
+      face.regions,
+      maskUniformsNow,
+    );
+  }, [processing, width, height, face, reshape, spots, geometry, source, maskRender.active, maskUniformsNow, baseImage]);
 
   /** Face outlines in canvas pixels (for the selector and taps). */
   const faceOutlines = useMemo(
@@ -209,9 +246,12 @@ export const EditorCanvas = memo(function EditorCanvas({
     [faces, geometry, width, height],
   );
 
-  // ── 터치 보정 ────────────────────────────────────────────
-  const brushPx = brush ? brush.radius * Math.min(width, height) : 0;
-  const brushRadius = brush?.radius ?? null;
+  // ── 터치 보정 / mask brush ───────────────────────────────
+  const maskBrush = maskTool?.brush ?? null;
+  const removalBrush = removalTool?.mode === 'brush' ? maskBrushRadius(removalTool.size) : null;
+  const screenBrush = maskBrush ? maskBrushRadius(maskBrush.size) : removalBrush;
+  const brushPx = brush ? brush.radius * Math.min(width, height) : screenBrush ? screenBrush * Math.min(width, height) : 0;
+  const brushRadius = brush?.radius ?? screenBrush;
   const cursorX = useSharedValue(0);
   const cursorY = useSharedValue(0);
   const cursorOpacity = useSharedValue(0);
@@ -325,7 +365,185 @@ export const EditorCanvas = memo(function EditorCanvas({
     .onStart(() => scheduleOnRN(onBeforeChange, true))
     .onFinalize(() => scheduleOnRN(onBeforeChange, false));
 
-  const gesture = brush
+  // ── 선택 보정 ────────────────────────────────────────────
+  const maskId = maskTool?.maskId ?? null;
+  const maskStart = (x: number, y: number) => {
+    if (!maskId || !maskBrush) return;
+    last.current = { x, y };
+    smoothed.current = { x, y };
+    // Screen-sized brush: zooming in paints finer.
+    const frame = frameSize(source.width, source.height, geometry);
+    const perPhoto = Math.min(frame.width, frame.height) / Math.min(source.width, source.height);
+    useEditorStore.getState().beginMaskStroke(maskId, {
+      mode: maskBrush.mode,
+      radius: (maskBrushRadius(maskBrush.size) * perPhoto) / zoom.scale.get(),
+      feather: maskBrush.feather,
+      flow: maskBrush.flow,
+      opacity: maskBrush.opacity,
+      points: [toSource(x, y)],
+    });
+  };
+  const maskMove = (x: number, y: number) => {
+    const prev = last.current;
+    const sm = smoothed.current;
+    if (!maskId || !prev || !sm) return;
+    sm.x += (x - sm.x) * 0.5;
+    sm.y += (y - sm.y) * 0.5;
+    if (Math.hypot(sm.x - prev.x, sm.y - prev.y) < 2) return;
+    last.current = { x: sm.x, y: sm.y };
+    useEditorStore.getState().extendMaskStroke(maskId, toSource(sm.x, sm.y));
+  };
+  const maskCancel = () => {
+    if (!last.current) return;
+    last.current = null;
+    smoothed.current = null;
+    useEditorStore.getState().revertLive();
+  };
+  const paintMask = Gesture.Pan()
+    .minDistance(0)
+    .maxPointers(1)
+    .onBegin((e) => {
+      cursorX.set(e.x);
+      cursorY.set(e.y);
+      cursorOpacity.set(withTiming(1, { duration: 80 }));
+      scheduleOnRN(maskStart, e.x, e.y);
+    })
+    .onUpdate((e) => {
+      cursorX.set(e.x);
+      cursorY.set(e.y);
+      scheduleOnRN(maskMove, e.x, e.y);
+    })
+    .onFinalize((_e, success) => {
+      cursorOpacity.set(withTiming(0, { duration: 150 }));
+      scheduleOnRN(success ? strokeEnd : maskCancel);
+    });
+
+  /** Source-normalised point → canvas pixels (photo space, before zoom). */
+  const toCanvas = (p: NormalizedPoint) => {
+    const f = sourceToFrame(p, geometry);
+    return { x: f.x * width, y: f.y * height };
+  };
+  const drag = useRef<{ handle: ShapeHandle; from: NormalizedPoint; shape: MaskShape } | null>(null);
+  const handleStart = (x: number, y: number) => {
+    if (!editedMask) return;
+    const p = zoom.toPhoto(x, y);
+    const handle = hitHandle(editedMask.shape, p, toCanvas, source.width, source.height, 26 / zoom.scale.get());
+    if (!handle) return;
+    drag.current = { handle, from: toSourceUnclamped(x, y), shape: editedMask.shape };
+  };
+  const handleMove = (x: number, y: number) => {
+    const d = drag.current;
+    if (!d || !maskId) return;
+    const next = dragShape(d.shape, d.handle, d.from, toSourceUnclamped(x, y), source.width, source.height);
+    useEditorStore.getState().setMask(maskId, (m) => ({ ...m, shape: next }));
+  };
+  const handleEnd = (success: boolean) => {
+    if (!drag.current) return;
+    drag.current = null;
+    if (success) useEditorStore.getState().commit();
+    else useEditorStore.getState().revertLive();
+  };
+  const dragHandles = Gesture.Pan()
+    .minDistance(2)
+    .maxPointers(1)
+    .onStart((e) => scheduleOnRN(handleStart, e.x - e.translationX, e.y - e.translationY))
+    .onUpdate((e) => scheduleOnRN(handleMove, e.x, e.y))
+    .onFinalize((_e, success) => scheduleOnRN(handleEnd, success));
+  const pickTap = Gesture.Tap()
+    .maxDistance(10)
+    .onEnd((e) => scheduleOnRN(maskTapAt, e.x, e.y));
+  function maskTapAt(x: number, y: number) {
+    onMaskTap?.(toSource(x, y));
+  }
+  function toSourceUnclamped(x: number, y: number) {
+    const p = zoom.toPhoto(x, y);
+    return frameToSource({ x: p.x / width, y: p.y / height }, geometry);
+  }
+  // ── 객체 제거 selection ───────────────────────────────────
+  const selRef = useRef<RemovalTool['selection']>(null);
+  const selStart = (x: number, y: number) => {
+    if (!removalTool) return;
+    const pt = toSource(x, y);
+    last.current = { x, y };
+    if (removalTool.mode === 'brush') {
+      const frame = frameSize(source.width, source.height, geometry);
+      const perPhoto = Math.min(frame.width, frame.height) / Math.min(source.width, source.height);
+      const stroke = { id: Date.now(), mode: 'add' as const, radius: (maskBrushRadius(removalTool.size) * perPhoto) / zoom.scale.get(), feather: 0, flow: 100, opacity: 100, points: [pt] };
+      const prev = removalTool.selection?.kind === 'brush' ? removalTool.selection.strokes : [];
+      selRef.current = { kind: 'brush', strokes: [...prev, stroke] };
+    } else {
+      selRef.current = { kind: 'lasso', points: [pt] };
+    }
+    removalTool.onSelection(selRef.current);
+  };
+  const selMove = (x: number, y: number) => {
+    const prev = last.current;
+    const sel = selRef.current;
+    if (!removalTool || !prev || !sel || Math.hypot(x - prev.x, y - prev.y) < 3) return;
+    last.current = { x, y };
+    const pt = toSource(x, y);
+    if (sel.kind === 'brush') {
+      const strokes = sel.strokes.slice();
+      const lastStroke = strokes[strokes.length - 1]!;
+      strokes[strokes.length - 1] = { ...lastStroke, points: [...lastStroke.points, pt] };
+      selRef.current = { kind: 'brush', strokes };
+    } else if (sel.kind === 'lasso') {
+      selRef.current = { kind: 'lasso', points: [...sel.points, pt] };
+    }
+    removalTool.onSelection(selRef.current);
+  };
+  const selEnd = () => {
+    last.current = null;
+    const sel = selRef.current;
+    // A lasso needs an area.
+    if (sel?.kind === 'lasso' && sel.points.length < 3) removalTool?.onSelection(null);
+  };
+  const paintSelection = Gesture.Pan()
+    .minDistance(0)
+    .maxPointers(1)
+    .onBegin((e) => {
+      cursorX.set(e.x);
+      cursorY.set(e.y);
+      cursorOpacity.set(withTiming(1, { duration: 80 }));
+      scheduleOnRN(selStart, e.x, e.y);
+    })
+    .onUpdate((e) => {
+      cursorX.set(e.x);
+      cursorY.set(e.y);
+      scheduleOnRN(selMove, e.x, e.y);
+    })
+    .onFinalize(() => {
+      cursorOpacity.set(withTiming(0, { duration: 150 }));
+      scheduleOnRN(selEnd);
+    });
+  const removalTap = Gesture.Tap()
+    .maxDistance(10)
+    .onEnd((e) => scheduleOnRN(removalTapAt, e.x, e.y));
+  function removalTapAt(x: number, y: number) {
+    removalTool?.onTap(toSource(x, y));
+  }
+  const removalGesture = !removalTool
+    ? null
+    : removalTool.mode === 'tap'
+      ? Gesture.Simultaneous(zoom.pinch, zoom.pan, Gesture.Exclusive(zoom.doubleTap, removalTap))
+      : Gesture.Simultaneous(zoom.pinch, paintSelection);
+
+  const shapeKind = editedMask?.shape.kind;
+  const maskGesture = !maskTool?.interactive
+    ? null
+    : maskBrush
+      ? Gesture.Simultaneous(zoom.pinch, paintMask)
+      : shapeKind === 'radial' || shapeKind === 'linear'
+        ? Gesture.Simultaneous(zoom.pinch, dragHandles)
+        : shapeKind === 'color'
+          ? Gesture.Simultaneous(zoom.pinch, zoom.pan, Gesture.Exclusive(zoom.doubleTap, pickTap))
+          : null;
+
+  const gesture = removalGesture
+    ? removalGesture
+    : maskGesture
+    ? maskGesture
+    : brush
     ? Gesture.Simultaneous(zoom.pinch, brush.mode === 'spot' ? tap : push)
     : showFaceGuides
       ? Gesture.Simultaneous(zoom.pinch, zoom.pan, Gesture.Exclusive(zoom.doubleTap, hold, faceTap))
@@ -349,6 +567,91 @@ export const EditorCanvas = memo(function EditorCanvas({
   }, [zoomEnabled, zoomed, zoomBy, panBy]);
 
   const spotMode = brush?.mode === 'spot';
+  const handleOverlay = useMemo(() => {
+    if (!editedMask || !maskTool?.interactive || maskBrush || showOriginal) return null;
+    const s = editedMask.shape;
+    if (s.kind !== 'radial' && s.kind !== 'linear') return null;
+    const map = (p: NormalizedPoint) => {
+      const f = sourceToFrame(p, geometry);
+      return { x: f.x * width, y: f.y * height };
+    };
+    const path = Skia.Path.Make();
+    if (s.kind === 'radial') {
+      for (const scale of [1, 1 - Math.min(0.95, s.feather / 100)]) {
+        ellipseOutline(s, source.width, source.height, scale).forEach((p, i) => {
+          const q = map(p);
+          if (i === 0) path.moveTo(q.x, q.y);
+          else path.lineTo(q.x, q.y);
+        });
+      }
+    } else {
+      // Two lines across the photo: full effect at the first, none at the second.
+      const a = map({ x: s.x0, y: s.y0 });
+      const b = map({ x: s.x1, y: s.y1 });
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const nx = -(b.y - a.y) / len;
+      const ny = (b.x - a.x) / len;
+      const reach = Math.hypot(width, height);
+      for (const q of [a, b]) {
+        path.moveTo(q.x - nx * reach, q.y - ny * reach);
+        path.lineTo(q.x + nx * reach, q.y + ny * reach);
+      }
+      path.moveTo(a.x, a.y);
+      path.lineTo(b.x, b.y);
+    }
+    const handles = Object.values(shapeHandles(s, source.width, source.height)).map(map);
+    return { path, handles };
+  }, [editedMask, maskTool?.interactive, maskBrush, showOriginal, geometry, width, height, source.width, source.height]);
+  // Selection to remove, drawn over the photo.
+  const selection = removalTool?.selection ?? null;
+  const selectionOverlay = useMemo(() => {
+    if (!selection || selection.kind === 'tap') return null;
+    const map = (p: NormalizedPoint) => {
+      const f = sourceToFrame(p, geometry);
+      return { x: f.x * width, y: f.y * height };
+    };
+    const frame = frameSize(source.width, source.height, geometry);
+    const pxPerSource = width / frame.width;
+    const short = Math.min(source.width, source.height);
+    if (selection.kind === 'lasso') {
+      const path = Skia.Path.Make();
+      selection.points.forEach((p, i) => {
+        const q = map(p);
+        if (i === 0) path.moveTo(q.x, q.y);
+        else path.lineTo(q.x, q.y);
+      });
+      path.close();
+      return [{ path, width: 0 }];
+    }
+    return selection.strokes.map((st) => {
+      const path = Skia.Path.Make();
+      st.points.forEach((p, i) => {
+        const q = map(p);
+        if (i === 0) path.moveTo(q.x, q.y);
+        else path.lineTo(q.x, q.y);
+      });
+      if (st.points.length === 1) path.lineTo(map(st.points[0]!).x + 0.01, map(st.points[0]!).y);
+      return { path, width: st.radius * short * pxPerSource * 2 };
+    });
+  }, [selection, geometry, width, height, source.width, source.height]);
+  // Tap selections: the found object's mask, tinted.
+  const tapUri = selection?.kind === 'tap' ? selection.image.uri : null;
+  const [tapImage, setTapImage] = useState<{ uri: string; image: SkImage } | null>(null);
+  useEffect(() => {
+    if (!tapUri) return;
+    let alive = true;
+    loadMaskImages([tapUri]).then((m) => {
+      const image = m.get(tapUri);
+      if (alive && image) setTapImage({ uri: tapUri, image });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [tapUri]);
+  const tapMatrix = useMemo(() => Skia.Matrix(sourceToOutput(geometry, source.width, source.height, width, height)), [geometry, source.width, source.height, width, height]);
+  const overlayStroke = useDerivedValue(() => 1.5 / zoom.scale.value);
+  const overlayShadow = useDerivedValue(() => 3 / zoom.scale.value);
+  const overlayHandle = useDerivedValue(() => 6 / zoom.scale.value);
   const cursorStyle = useAnimatedStyle(() => {
     // 잡티 circles follow the zoom (photo-sized); 밀기 stays screen-sized.
     const k = spotMode ? zoom.scale.value : 1;
@@ -386,14 +689,44 @@ export const EditorCanvas = memo(function EditorCanvas({
             {unit && frame && !showOriginal ? <Rect x={0} y={0} width={width} height={height} color={frame.color} /> : null}
             <Group clip={photoClip}>
               <LumiLayer
-                image={working.image}
+                image={baseImage ?? working.image}
                 width={width}
                 height={height}
                 uniforms={showOriginal ? null : uniforms}
                 reshape={reshape}
                 curves={processing.curves}
                 mixCurves={processing.mix?.curves ?? null}
+                maskAtlas={maskRender.atlas?.image ?? null}
+                bgLayer={bgLayer}
               />
+              {tapUri && tapImage?.uri === tapUri && !showOriginal ? (
+                <Group matrix={tapMatrix} opacity={0.5}>
+                  <SkiaImage image={tapImage.image} x={0} y={0} width={source.width} height={source.height} fit="fill">
+                    {/* Mask brightness → alpha, colour = Lumi apricot. */}
+                    <ColorMatrix matrix={[0, 0, 0, 0, 0.91, 0, 0, 0, 0, 0.58, 0, 0, 0, 0, 0.42, 1, 0, 0, 0, 0]} />
+                  </SkiaImage>
+                </Group>
+              ) : null}
+              {selectionOverlay && !showOriginal ? (
+                <Group opacity={0.5}>
+                  {selectionOverlay.map((o, i) =>
+                    o.width > 0 ? (
+                      <Path key={i} path={o.path} style="stroke" strokeWidth={o.width} strokeCap="round" strokeJoin="round" color={colors.accent} />
+                    ) : (
+                      <Path key={i} path={o.path} color={colors.accent} />
+                    ),
+                  )}
+                </Group>
+              ) : null}
+              {handleOverlay ? (
+                <Group>
+                  <Path path={handleOverlay.path} style="stroke" strokeWidth={overlayShadow} color="rgba(0,0,0,0.3)" />
+                  <Path path={handleOverlay.path} style="stroke" strokeWidth={overlayStroke} color="rgba(255,255,255,0.9)" />
+                  {handleOverlay.handles.map((h, i) => (
+                    <Circle key={i} cx={h.x} cy={h.y} r={overlayHandle} color={i === 0 ? colors.white : colors.accent} />
+                  ))}
+                </Group>
+              ) : null}
               {showFaceGuides && !showOriginal ? (
                 <FaceGuides outlines={faceOutlines} selectedId={selectedFaceId} plan={facePlan} />
               ) : null}
@@ -426,7 +759,7 @@ export const EditorCanvas = memo(function EditorCanvas({
             ) : null}
           </Group>
         </Canvas>
-        {brush ? (
+        {brush || maskBrush || removalBrush ? (
           <Animated.View
             pointerEvents="none"
             style={[styles.cursor, { width: brushPx * 2, height: brushPx * 2, borderRadius: brushPx }, cursorStyle]}

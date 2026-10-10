@@ -1,4 +1,5 @@
 import type { DateStampStyle, FilmEffects, FilterMix, FrameSettings } from './film';
+import type { AutoEnhanceState, BackgroundEdit, ObjectRemoval, SelectiveMask } from './phase4';
 
 /**
  * Shared editing vocabulary. Filters, user adjustments and retouch all speak
@@ -134,7 +135,20 @@ export interface EditState {
    * unknown (SourceImage.dateKnown false). Never defaults to "today".
    */
   stampDate: number | null;
+
+  // ── Phase 4 (EditDocument v2; older documents get the defaults) ──
+  /** Auto Enhance's share of `adjustments` (null = never run). */
+  autoEnhance: AutoEnhanceState | null;
+  /** 선택 보정 masks, bottom to top. */
+  masks: readonly SelectiveMask[];
+  /** 객체 제거 patches, in the order applied. */
+  removals: readonly ObjectRemoval[];
+  /** 배경 편집 behind the segmented subject. */
+  background: BackgroundEdit;
 }
+
+/** EditState format version written with projects and versions (Phase 4 = 2). */
+export const EDIT_DOCUMENT_VERSION = 2;
 
 /** A face's position for re-identification: centre and size, normalised against the source image. */
 export interface FaceAnchor {

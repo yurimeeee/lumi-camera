@@ -10,6 +10,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 const ORIGINALS = 'originals';
 const RECIPES = 'recipes';
 const STUDIO = 'studio';
+const MASKS = 'masks';
 
 function dir(name: string): Directory {
   const d = new Directory(Paths.document, name);
@@ -73,5 +74,30 @@ export function deleteFileQuietly(uri: string | null | undefined): void {
     if (f.exists) f.delete();
   } catch {
     // Already gone.
+  }
+}
+
+/** Where a new AI mask / inpainting patch file goes (Documents/masks, kept with the project). */
+export function newMaskFileUri(prefix: string, ext: 'png' = 'png'): string {
+  return new File(dir(MASKS), `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`).uri;
+}
+
+/** Writes a PNG produced in JS (inpainting patches) into the masks folder. */
+export function writeMaskPng(bytes: Uint8Array, prefix: string): string {
+  const file = new File(newMaskFileUri(prefix));
+  file.create({ overwrite: true });
+  file.write(bytes);
+  return file.uri;
+}
+
+/** Deletes mask / patch files no edit (project, versions, open editor) references. */
+export function pruneMaskFiles(keep: readonly (string | null | undefined)[]): void {
+  try {
+    const keepSet = new Set(keep.filter(Boolean));
+    for (const item of dir(MASKS).list()) {
+      if (item instanceof File && !keepSet.has(item.uri)) item.delete();
+    }
+  } catch {
+    // Housekeeping only.
   }
 }

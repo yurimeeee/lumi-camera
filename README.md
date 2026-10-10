@@ -8,11 +8,14 @@ VSCO보다 쉽고 기본 카메라보다 감성적인, warm · soft · film 톤�
 | 영역 | 기능 |
 | --- | --- |
 | 카메라 | **PHOTO / FILM 모드** — FILM은 필름 카메라 8종(Classic 35 · Disposable · CCD 2004 · Retro Flash · Soft Diary · Polaroid · Cinema 400 · Mono Film, 카메라별 색·그레인·플래시·할레이션·프레임·날짜, [필름 카메라](#필름-엔진-phase-3) 참고), **촬영 프리셋**(Daily Warm · Summer Film · Night Flash · Soft Portrait + 지금 설정 저장, 카메라 재시작 없이 전환), DATE 토글, **프레임 단위 GPU 실시간 필터**(Development Build: 편집·저장과 같은 Lumi 셰이더를 카메라 프레임에 적용, [카메라](#카메라-실시간-필터) 참고), 촬영, 전/후면 전환, 플래시(Auto/On/Off), 타이머(3·5·10초 카운트다운, 탭해서 취소), 3×3 격자, 촬영 비율(Full/1:1/4:3/16:9), 탭 초점 + 노출 보정 슬라이더, 필터/레시피 강도(선택한 필터를 한 번 더 탭), 피부 보정 강도, 필터 캐러셀(All·Favorites·My·카테고리 탭), 셔터 블링크 + 햅틱 |
-| 필터 | 20종(Original, Warm 5, Cool 3, Film 5, Soft 3, B&W 3) — 톤 파라미터 + 스플릿 톤 + 필름 톤 커브 + 색상별 HSL의 조합, 강도 0(원본)…100(정의된 효과), 카테고리별 보기, 상세 화면, 즐겨찾기(AsyncStorage 저장) |
+| 필터 | 20종(Original, Warm 5, Cool 3, Film 5, Soft 3, B&W 3) — 톤 파라미터 + 스플릿 톤 + 필름 톤 커브 + 색상별 HSL의 조합, 강도 0(원본)…100(정의된 효과), 카테고리별 보기, 상세 화면, 즐겨찾기(AsyncStorage 저장). 편집기의 **추천** 탭은 사진 밝기·색온도·채도·얼굴 유무를 보고 필터를 골라 이유와 함께 보여 줌 |
 | My Recipe | 필터·필터 혼합·조정·HSL·커브·**필름 효과**(그레인·블룸·할레이션·빛샘·번·먼지·스크래치·비네팅…)·**프레임**·**날짜 스탬프 스타일**을 이름 붙여 저장 → 다른 사진·카메라·일괄 보정에 적용, 이름 변경·즐겨찾기·삭제, 썸네일. 버전 있는 문서(v2)와 v1 마이그레이션. 자르기·얼굴 보정·촬영 날짜·위치는 포함하지 않음 |
 | 앨범 | 최근 사진 그리드(페이지네이션), 제한된 접근(iOS limited) 안내 및 추가 선택, 권한 없이도 시스템 사진 선택기로 편집 가능. **일괄 보정**: 여러 장 선택(최대 50) → 레시피 또는 최근 편집한 보정 → 한 장씩 처리·진행률·취소·실패 재시도·완료 결과, 앱이 꺼져도 이어서 진행 |
 | 편집 | 필터 + 강도, 조정 12종, **HSL**(8색 × 색상·채도·밝기), **톤 커브**(RGB·R·G·B, 점 추가·드래그·삭제), 보정(Retouch: Skin 11종(얼굴 영역 기반 다크서클·주름·홍조·치아 미백·눈 밝게 포함) + 얼굴 랜드마크 기반 Face 8 · Eyes 8(양쪽/왼쪽/오른쪽 개별) · Nose 7 · Lips 8 · Proportion 7, 도구별 자동 확대, [얼굴 보정](#얼굴-보정-retouch) 참고), 터치 보정(밀기: 브러시 크기·강도 선택 후 드래그 / 복원: 문질러 되돌리기 / 잡티 제거: 크기 선택 후 탭), **필터 혼합**(A → B 순차 적용, 강도 각각), **필름**(그레인 양·크기·거칠기·색 노이즈, 블룸, 할레이션, 소프트 포커스, 빛샘 5종, 필름 번 3종, 먼지, 스크래치, 색수차, 비네팅, 페이드, 플래시, 색 편차, 패턴 바꾸기) + **프레임 7종**(테두리·색·여백·모서리) + **날짜 스탬프**(형식 4·위치 4·색·크기, 촬영 날짜를 모르면 직접 선택), 자르기(Free/Original/1:1/4:3/3:4/16:9/9:16, 드래그·코너 리사이즈), 90° 회전, 좌우/상하 반전, Before/After(길게 누르기 또는 버튼), Undo/Redo(최대 40단계), 개별/전체 초기화, 핀치 확대·축소(최대 6배, 더블탭·‘원래 크기’로 복귀, 웹은 트랙패드 핀치·Ctrl/⌘+휠) |
-| 저장 | 화면 캡처가 아니라 원본에서 오프스크린 렌더링(긴 변 최대 4096px / 2048px, 프레임은 그 둘레에 더해짐) → JPEG 80·90(기본)·100% 또는 PNG → EXIF(JPEG: 촬영 시각, 선택 시 GPS) → 사진 보관함 ‘Lumi’ 앨범, “사진에 저장했어요”. 중복 저장 방지, 오류 시 안내. 원본 함께 저장 시 ‘Lumi Originals’에 별도 저장 |
+| AI 편집 | **Auto Enhance**(조정 › 기본 › 자동, 강도 0~100), **선택 보정**(브러시·원형·선형·색상 범위·밝기 범위 마스크, 마스크별 10개 보정), **AI 마스크**(피사체·배경·인물·피부), **배경 흐림·교체**, **객체 제거**(브러시·올가미·탭 → 미리보기 → 적용). 모두 기기 안에서 처리. [Phase 4](#ai-편집과-작업-흐름-phase-4) 참고 |
+| 작업 흐름 | 편집 기록(단계 이름 자동 생성, 원하는 단계로 이동), 버전 저장·복원, 편집 복사/붙여넣기(항목 선택), 상세 저장(형식·품질·해상도·메타데이터·저장 위치) |
+| Frame Studio | 프레임 27종·종이 텍스처·장식 스티커·텍스트, 레이아웃·콜라주, 앨범 사진으로 프레임·배경 만들기, 템플릿 저장, 고해상도 저장 |
+| 저장 | 화면 캡처가 아니라 원본에서 오프스크린 렌더링(긴 변 최대 4096px / 2048px, 프레임은 그 둘레에 더해짐) → JPEG 80·90(기본)·100% 또는 PNG → EXIF(JPEG: 촬영 시각, 선택 시 GPS) → 사진 보관함 ‘Lumi’ 앨범, “사진에 저장했어요”. 중복 저장 방지, 오류 시 안내. 원본 함께 저장 시 ‘Lumi Originals’에 별도 저장. 저장 버튼을 길게 누르면 상세 저장 |
 | 비파괴 편집 | 편집할 사진은 앱 Documents에 사본으로 보관(원본 파일은 읽기만), 편집은 데이터(EditState)로만 저장. 마지막 편집 상태 자동 저장 → 앱을 다시 열면 ‘편집하던 사진이 있어요 · 이어서 편집’ |
 | 설정 | 무음 모드(시스템 셔터음은 끌 수 없음을 안내), 격자, 타이머, 거울 모드, 위치 정보 저장, 촬영 날짜 표시 + 형식 4종, 원본 함께 저장, 고해상도 저장, 저장 형식(JPEG/PNG)·JPEG 품질, 기본 필터·강도·촬영 비율, **필름 설정**(기본 필름 카메라·기본 그레인·기본 프레임·날짜 스탬프 스타일·필름 효과 강도), My Recipe 관리 (Zustand + AsyncStorage) |
 
@@ -27,6 +30,9 @@ VSCO보다 쉽고 기본 카메라보다 감성적인, warm · soft · film 톤�
 - react-native-reanimated 4 + react-native-worklets, react-native-gesture-handler
 - piexifjs (순수 JS EXIF 쓰기)
 - 얼굴 랜드마크: Apple Vision(iOS, 로컬 Expo 모듈 `modules/lumi-face-landmarks`) · MediaPipe Face Landmarker(웹)
+- 피사체 분리: Apple Vision(iOS, 로컬 Expo 모듈 `modules/lumi-vision`) · MediaPipe Image Segmenter(웹)
+- 객체 제거: PatchMatch(직접 구현, 전 플랫폼) · MI-GAN + onnxruntime-web(웹)
+- expo-sharing (상세 저장의 공유·파일 저장)
 - expo-dev-client (얼굴 보정의 iOS 네이티브 검출 때문에 Development Build 사용)
 
 ## 프로젝트 구조
@@ -41,7 +47,11 @@ src/
     filters/index.tsx       필터 전체 보기
     filters/[id].tsx        필터 상세
     favorites/index.tsx     즐겨찾기 필터
+    recipes/index.tsx       My Recipe 관리
+    batch/index.tsx         일괄 보정
+    studio/index.tsx        Frame Studio
     settings/index.tsx      설정
+  features/frame-studio/    Frame Studio (화면·모델·렌더·스토어)
   components/
     common/                 IconButton, PressableScale, SliderControl, SegmentedControl,
                             ChipTabs, BottomSheet, Toast, Header, PermissionView
@@ -64,19 +74,25 @@ src/
     faceWarp/               FaceWarpEngine(계획·유니폼·셰이더 미러), mesh(얼굴 모델·윤곽 프로파일),
                             transforms(슬라이더 → 변형), limits(자연스러운 최대치), shader(SkSL),
                             regions(피부 도구 영역·특징 보호 마스크 + SkSL), faceRender(미리보기·저장 공용 진입점)
+    masks/                  maskRaster(마스크 → atlas), maskRender, shader, backgroundLayer
+    segmentation/           Segmenter(진입점·캐시), backend(.web)(Vision / MediaPipe)
+    inpaint/                patchmatch, objectRemoval, migan(.web)
+                            autoEnhance, recommend, history, editClipboard, proExport, exportOptions
   stores/                   cameraStore, editorStore, filterStore, settingsStore, toastStore
   hooks/                    useCapture, useSaveEdit, useWorkingImage, usePreviewImage,
                             useFilterThumbnail, useOpenInEditor, useFaces
   types/, utils/
 assets/fonts/               DSEG7 Classic (날짜 스탬프용 7-segment 폰트, SIL OFL 1.1)
 modules/lumi-face-landmarks/ 로컬 Expo 모듈: Apple Vision 얼굴 랜드마크(iOS, Swift)
+modules/lumi-vision/        로컬 Expo 모듈: Apple Vision 피사체 분리(iOS, Swift)
+docs/phase4-progress.md     Phase 4 진행 현황·검증 결과·제약
 ```
 
 ## 설치 & 실행
 
 ```bash
 cd lumi-camera
-npm install          # postinstall이 웹용 canvaskit.wasm·MediaPipe 런타임을 public/에 복사합니다
+npm install          # postinstall이 웹용 canvaskit.wasm·MediaPipe·ONNX Runtime을 public/에 복사합니다
 npx expo start       # Development Build(또는 Expo Go)로 열기
 ```
 
@@ -84,6 +100,8 @@ npx expo start       # Development Build(또는 Expo Go)로 열기
 | --- | --- |
 | `npm run typecheck` | `tsc --noEmit` (앱 + `scripts/face-warp` + `scripts/image-engine`) |
 | `npm run test:engine` | 이미지 엔진·상태 테스트 + 실제 셰이더 golden image (macOS/Linux + [Bun]) |
+| `npm run test:phase4` | 마스크·배경·객체 제거 테스트 (실제 Skia) |
+| `npm run test:frames` | Frame Studio 렌더 테스트 + golden image |
 | `npm run lint` | `expo lint` |
 | `npx expo-doctor` | 의존성·설정 진단 |
 | `npm run web` | 웹에서 UI 확인 (얼굴 보정 포함, MediaPipe) |
@@ -99,6 +117,7 @@ npx expo start       # Development Build(또는 Expo Go)로 열기
 | 항목 | 내용 |
 | --- | --- |
 | `modules/lumi-face-landmarks` | 로컬 Expo 모듈(autolinking, `expo-module.config.json`). `detect(uri)` → 얼굴별 랜드마크 영역. iOS 16.4+ |
+| `modules/lumi-vision` | 로컬 Expo 모듈. 피사체·인물 분리 마스크(배경 편집, AI 마스크). iOS 15+, 일부 기능은 iOS 17+ |
 | Vision.framework, ImageIO.framework | iOS 시스템 프레임워크 — 외부 라이브러리·모델 파일·네트워크 없음, 기기 안에서 처리 |
 | `expo-dev-client` | Development Build 런처 |
 | `react-native-vision-camera` 5 (+ `-skia`, `-worklets`), `react-native-nitro-modules`, `react-native-nitro-image` | 카메라 프레임 → Skia 텍스처 → Lumi 셰이더. 권한 문구는 기존 expo-camera 플러그인의 `NSCameraUsageDescription` 사용 |
@@ -296,11 +315,73 @@ interface Recipe {            // types/recipes.ts
 - 효과는 켜진 것만 계산합니다(`uFilm[6].y` 플래그와 효과별 분기). 블룸·할레이션·소프트 포커스는 작은 사본에서 16탭씩만 읽습니다. 카메라 실시간 미리보기는 프레임 자체(미리보기 크기 버퍼)를 `lowRes`로 쓰고, 별도 축소 패스를 만들지 않습니다.
 - **실기기 성능은 측정하지 않았습니다**(iPhone 빌드 불가 환경). CanvasKit CPU 렌더 시간은 GPU 성능의 지표가 아니라 수치를 싣지 않습니다.
 
+## AI 편집과 작업 흐름 (Phase 4)
+
+자세한 진행 내역과 검증 수치는 [`docs/phase4-progress.md`](docs/phase4-progress.md)에 있습니다.
+
+### Auto Enhance
+
+`services/autoEnhance.ts`가 사진의 히스토그램·클리핑·채도·색 캐스트를 측정하고, 셰이더 톤 단계를 CPU로 옮긴 모델로 노출·밝기·대비·하이라이트·그림자·색온도·색조·생동감·채도를 계산합니다. 결과는 일반 `adjustments`에 들어가서 슬라이더로 다시 고칠 수 있습니다. 강도는 Auto가 바꾼 몫만 조절하고, 강도 0은 Auto 전과 픽셀 단위로 같습니다. 아주 어둡거나 밝은 사진은 목표의 절반만 보정합니다.
+
+### 선택 보정
+
+- 마스크: 브러시(크기·경계·흐름·불투명도, 칠하기/지우기), 원형, 선형 그라데이션, 색상 범위(탭으로 색 선택), 밝기 범위. 모든 마스크는 브러시로 다듬을 수 있습니다.
+- 마스크마다 노출·밝기·대비·하이라이트·그림자·채도·색온도·색조·명료도·선명도를 따로 조절합니다. 이름 변경·복제·삭제·숨기기·반전 가능.
+- 마스크는 원본 좌표로 저장하고, 렌더할 때 RGB atlas(타일당 3채널, 최대 8개 + 피사체 채널)로 래스터화합니다. 셰이더는 워프 후 위치에서 마스크를 읽기 때문에 자르기·회전·얼굴 보정을 해도 마스크가 내용을 따라갑니다.
+- 마스크 안의 보정은 전역 슬라이더와 같은 코드를 씁니다. 미리보기(1024 타일)와 저장(2048 타일)이 같은 문서에서 만들어집니다.
+
+### 피사체 분리 · 배경 · 객체 제거
+
+| 기능 | iOS | 웹 |
+| --- | --- | --- |
+| 피사체 분리 | Vision person segmentation(`modules/lumi-vision`), iOS 17+는 foreground instance도 사용 | MediaPipe selfie-multiclass + DeepLab-v3 |
+| AI 마스크 | 피사체·배경·인물 | 피사체·배경·인물·피부 |
+| 객체 제거 | PatchMatch | PatchMatch, MI-GAN(ONNX, 약 28MB) |
+
+- 배경 흐림은 정규화 합성곱이라 피사체 색이 배경으로 번지지 않습니다. 심도 데이터는 쓰지 않는 2D 흐림입니다.
+- 배경 교체는 단색·그라데이션·종이·앨범 사진 중에서 고르고, 확대·위치·흐림·밝기·채도를 조절합니다. Frame Studio의 배경 렌더러를 같이 씁니다.
+- 객체 제거는 결과를 먼저 보여 주고 적용/취소를 고르게 합니다. 적용한 결과는 Undo/Redo와 저장에 반영됩니다. 처리 중 30ms마다 UI에 양보해서 취소할 수 있습니다.
+- 웹은 모델을 받기 전에 크기를 알려 주고 동의를 받습니다. 처리는 모두 기기 안에서 합니다.
+- AI 마스크·패치 파일은 `Documents/masks`에 저장하고, 사진을 새로 열 때 어디서도 참조하지 않는 파일만 지웁니다.
+
+### 편집 기록 · 버전 · 복사/붙여넣기
+
+- **편집 기록**: 헤더의 🕘. 스냅샷끼리 비교해서 “필터 — Mellow”, “노출 +15”, “HSL — Orange” 같은 이름을 붙입니다. 단계를 누르면 그 시점으로 돌아갑니다. 기록은 선형이라, 되돌린 뒤 새로 편집하면 이후 기록은 사라집니다.
+- **버전**: ⋯ › 버전. 보정 값만 스냅샷으로 저장하고(사진은 복사하지 않음) 프로젝트와 함께 자동 저장됩니다.
+- **편집 복사/붙여넣기**: 필터·조정·HSL·커브·필름 효과·프레임 중 골라서 다른 사진에 붙여넣습니다. 얼굴 보정·터치·잡티·마스크·객체 제거·배경 분리·자르기처럼 사진마다 다른 편집은 빠집니다. My Recipe와 같은 `Look` 직렬화를 씁니다.
+- **프로젝트 v2**: `EditProject`에 `documentVersion`과 `versions`가 추가됐습니다. v1 프로젝트는 불러올 때 v2로 바뀌고 새 필드는 기본값으로 채워집니다.
+
+### 상세 저장
+
+저장 버튼을 길게 누르거나 ⋯ › 상세 저장.
+
+| 항목 | 선택지 |
+| --- | --- |
+| 형식 | JPEG, PNG, HEIC(iOS 개발 빌드만, ImageIO) |
+| 품질 | 표준 / 높음 / 최대 |
+| 해상도 | 원본 / 2048 / 4096 / 직접 입력 (가져온 사진보다 키우지 않음) |
+| 메타데이터 | 유지 / 위치 제거 / 모두 제거 |
+| 저장 위치 | 사진 / 공유 / 파일 (웹은 다운로드·Web Share) |
+
+빠른 저장(탭)은 기존과 같습니다. 두 경우 모두 같은 오프스크린 렌더러를 씁니다.
+
+## Frame Studio
+
+편집기의 프레임 메뉴와 `studio` 화면에서 씁니다. 프레임 키트(SVG 프레임 27, 텍스처 8, 장식 7, 레이아웃 9)는 `assets/frames`에 있고, `manifest.json`으로 레지스트리를 만듭니다(`npm run frames:generate`).
+
+- SVG를 Skia 도형으로 파싱해 9-slice로 다시 배치합니다. 두께와 여백을 바꿔도 모서리가 늘어나지 않고, 편집 가능한 색만 바뀝니다.
+- 종이 셰이더: 텍스처·섬유·에이징·모서리 마모(프레임 영역에만), 사진 바램(사진에만).
+- 앨범 사진을 프레임으로 쓸 수 있습니다. PNG는 투명 영역을 자동으로 찾고, JPG는 사각·둥근·타원·자유형 영역을 지정합니다. 앨범 사진을 배경으로 쓸 때는 채우기·흐림·밝기·채도를 조절합니다.
+- 장식·텍스트 레이어: 이동·확대·회전·불투명도·복제·삭제·순서·잠금. 템플릿으로 저장해 다시 쓸 수 있습니다.
+- 미리보기(SkPicture)와 저장(오프스크린 4096px)이 같은 캔버스 문서를 씁니다.
+
 ## 테스트
 
 | 명령 | 내용 |
 | --- | --- |
-| `npm run test:engine` | Bun + CanvasKit. **실제 LUMI_SKSL**을 CPU로 렌더링해 검사(81개). 필름(`film.test.ts`, 24개): 모든 효과 0 = 원본(모양·seed가 있어도), 강한 설정에서 효과별 변화, 그레인 seed 재현성·다른 seed 다른 패턴·양 0 = 없음·중간톤 응답, 미리보기 vs 저장 그레인 세기·색 평균, 먼지·스크래치 seed 재현성·해상도 무관 위치, 빛샘·번 중앙 보호, Classic 35 미리보기 = 저장, golden(필름 효과 7장, 필름 카메라 8장, 혼합 1장), 카메라 8종 서로 다름·Mono 무채색·Polaroid 프레임·강도 0 = 원본, 프리셋 적용 시 세션 값 유지, 필터 혼합(B 0 = A, 순차 모델·순서 의존, B&W B), Recipe v2 직렬화·역직렬화·v1 마이그레이션·부분 문서 복구·미래 버전 거부·날짜 미포함, 날짜 형식·촬영 날짜 처리(모르면 null), 프레임 레이아웃(사진 크기·비율 유지, 퍼포레이션 위치, 미리보기 비율 = 저장 비율), 일괄 보정 큐(한 장씩·실패 후 계속·매 단계 저장·취소·재시도·앱 종료 후 복구). 얼굴 보정(`face.test.ts`, 22개): 모든 컨트롤 0 = 워프·영역 없음, 눈 각도 ±(바깥 눈꼬리 위/아래, 홍채 중심 고정), 한쪽 눈 값은 그 눈만, 인중(입만 이동·코·턱 고정), 콧구멍(코끝 고정), 입꼬리(입 중심 고정), 모든 컨트롤 ±100에서 접힘 없음·사진 가장자리 고정, 피부 영역(보호 마스크가 눈·눈썹·입술·콧구멍만 덮음, 도구마다 자기 영역만, 다문 입은 치아 영역 없음), 셰이더(치아 미백은 누런 치아만·입술 그대로, 다크서클은 그늘만 볼 톤으로·속눈썹 유지, 보호 영역은 강한 피부 보정에도 픽셀 그대로, 피부결 0 = 원본), 얼굴 ID 재매칭, 자동 확대 영역, 얼굴별 상태·Undo, 구버전 프로젝트 복구. Phase 1(35개): 셰이더 컴파일, 중립 uniform = 원본(HSL·커브 경로 강제 실행), 모든 필터 강도 0 = 원본, 강도 100 = 정의값, 필터 간 구별, HSL Orange/Blue가 피부·하늘만 바꾸고 회색은 그대로 + CPU 미러와 픽셀 일치(≤2/255), 색상 경계 단절 없음, S-커브·Blue 채널이 LUT와 일치(≤1/255), 극단적 커브에서도 NaN·범위 초과 없음, **미리보기 해상도 vs 저장 해상도 결과 일치**(시나리오 B), golden image 9장(`scripts/image-engine/golden`), Undo/Redo, Reset(HSL 색상별·커브 채널별·전체), Recipe 저장/적용/삭제/이름 변경/영속화, EditProject 직렬화·구버전 문서 복구, 원본 참조 유지·ID 충돌 없음, 인코딩 실패 오류 |
+| `npm run test:engine` | Bun + CanvasKit. **실제 LUMI_SKSL**을 CPU로 렌더링해 검사(109개). Phase 4: Auto Enhance(셰이더와 ≤3/255 일치, 강도 0 = 원본), 객체 제거, 필터 추천, 편집 기록·버전·붙여넣기·프로젝트 마이그레이션·저장 옵션. 필름(`film.test.ts`, 24개): 모든 효과 0 = 원본(모양·seed가 있어도), 강한 설정에서 효과별 변화, 그레인 seed 재현성·다른 seed 다른 패턴·양 0 = 없음·중간톤 응답, 미리보기 vs 저장 그레인 세기·색 평균, 먼지·스크래치 seed 재현성·해상도 무관 위치, 빛샘·번 중앙 보호, Classic 35 미리보기 = 저장, golden(필름 효과 7장, 필름 카메라 8장, 혼합 1장), 카메라 8종 서로 다름·Mono 무채색·Polaroid 프레임·강도 0 = 원본, 프리셋 적용 시 세션 값 유지, 필터 혼합(B 0 = A, 순차 모델·순서 의존, B&W B), Recipe v2 직렬화·역직렬화·v1 마이그레이션·부분 문서 복구·미래 버전 거부·날짜 미포함, 날짜 형식·촬영 날짜 처리(모르면 null), 프레임 레이아웃(사진 크기·비율 유지, 퍼포레이션 위치, 미리보기 비율 = 저장 비율), 일괄 보정 큐(한 장씩·실패 후 계속·매 단계 저장·취소·재시도·앱 종료 후 복구). 얼굴 보정(`face.test.ts`, 22개): 모든 컨트롤 0 = 워프·영역 없음, 눈 각도 ±(바깥 눈꼬리 위/아래, 홍채 중심 고정), 한쪽 눈 값은 그 눈만, 인중(입만 이동·코·턱 고정), 콧구멍(코끝 고정), 입꼬리(입 중심 고정), 모든 컨트롤 ±100에서 접힘 없음·사진 가장자리 고정, 피부 영역(보호 마스크가 눈·눈썹·입술·콧구멍만 덮음, 도구마다 자기 영역만, 다문 입은 치아 영역 없음), 셰이더(치아 미백은 누런 치아만·입술 그대로, 다크서클은 그늘만 볼 톤으로·속눈썹 유지, 보호 영역은 강한 피부 보정에도 픽셀 그대로, 피부결 0 = 원본), 얼굴 ID 재매칭, 자동 확대 영역, 얼굴별 상태·Undo, 구버전 프로젝트 복구. Phase 1(35개): 셰이더 컴파일, 중립 uniform = 원본(HSL·커브 경로 강제 실행), 모든 필터 강도 0 = 원본, 강도 100 = 정의값, 필터 간 구별, HSL Orange/Blue가 피부·하늘만 바꾸고 회색은 그대로 + CPU 미러와 픽셀 일치(≤2/255), 색상 경계 단절 없음, S-커브·Blue 채널이 LUT와 일치(≤1/255), 극단적 커브에서도 NaN·범위 초과 없음, **미리보기 해상도 vs 저장 해상도 결과 일치**(시나리오 B), golden image 9장(`scripts/image-engine/golden`), Undo/Redo, Reset(HSL 색상별·커브 채널별·전체), Recipe 저장/적용/삭제/이름 변경/영속화, EditProject 직렬화·구버전 문서 복구, 원본 참조 유지·ID 충돌 없음, 인코딩 실패 오류 |
+| `npm run test:phase4` | 마스크(14개)·배경·객체 제거, 총 25개. 원형 마스크 안/밖, 브러시 Undo, 배경 흐림에서 피사체 색 번짐 없음 등 |
+| `npm run test:frames` | Frame Studio 37개 + 시나리오 A–F golden image |
 | `npm run test:engine:update` | 의도한 룩 변경 후 golden image 갱신 |
 | `npm run check:face-warp` | 실제 사진 14장 + Apple Vision 랜드마크로 얼굴 워프 회귀 검사(1196 케이스) + 피부 영역 위치 검사(15개 얼굴), [검증 결과](#검증-결과) 참고 |
 | `npm run render:face-retouch` | 실제 사진에서 컨트롤별 전/후 비교 시트를 `.face-warp-cache/renders/`에 저장(사람이 보는 용도). 피부 도구가 영역 밖 픽셀을 바꾸면 실패 |
@@ -517,6 +598,7 @@ macOS에서 같은 Swift 검출 코드(Apple Vision)로 테스트 사진의 랜�
 - **얼굴 보정(웹)**: MediaPipe Face Landmarker(478점 메시)로 검출합니다. 워프 엔진·셰이더는 iOS와 같습니다.
   - MediaPipe JS·WASM은 postinstall(`scripts/setup-mediapipe.js`)이 `public/mediapipe/`에 복사합니다. 번들 안의 동적 `import(url)`을 Metro가 변환하지 못해, Metro를 거치지 않고 브라우저가 직접 import합니다. 모델(`face_landmarker.task`, 약 3.6MB)은 처음 쓸 때 Google 모델 저장소에서 받습니다.
   - 이미지 입력에 WebGL이 필요합니다. WebGL이 없는 브라우저에서는 ‘얼굴 인식을 불러오지 못했어요’가 표시됩니다(헤드리스 Chromium은 `--use-angle=swiftshader`로 동작).
+- **피사체 분리·객체 제거(웹)**: MediaPipe Image Segmenter와 MI-GAN(onnxruntime-web)을 씁니다. ONNX Runtime 파일은 postinstall(`scripts/setup-ort.js`)이 `public/ort/`에 복사하고, 모델은 처음 쓸 때 크기 안내와 동의를 거쳐 받습니다.
 - `index.web.ts`는 CanvasKit을 먼저 로드하고, React 19 개발 모드 성능 트랙이 WASM 힙을 순회하며 멈추는 문제를 막기 위해 힙 뷰를 non-enumerable로 바꿉니다.
 
 ## 향후 개선
@@ -529,11 +611,16 @@ macOS에서 같은 Swift 검출 코드(Apple Vision)로 테스트 사진의 랜�
 - 크롭 화면 핀치 줌, 자유 각도 회전(수평 맞추기)
 - VIDEO 모드, Live Photo
 - 3D LUT(.cube) 가져오기, 레시피 공유(내보내기/가져오기)
-- HEIC 저장, Display P3 컬러 유지
+- Display P3 컬러 유지, 웹 HEIC 저장
+- iPhone 실기기에서 Phase 4 검증(피사체 분리 품질·시간·메모리, 대용량 저장)
+- iOS 학습 기반 객체 제거(Core ML), 큰 물체 제거 품질 개선
+- 인물 사진 심도(disparity) 맵을 쓰는 배경 흐림, 하늘 자동 선택
 - 다크 모드 테마
 
 ## 라이선스 고지
 
 `assets/fonts/DSEG7Classic-Bold.ttf`: DSEG © keshikan, SIL Open Font License 1.1 (`assets/fonts/DSEG-LICENSE.txt`).
+
+`assets/fonts/Inter-Medium.ttf`: Inter © The Inter Project Authors, SIL Open Font License 1.1 (`assets/fonts/Inter-LICENSE.txt`).
 
 [Bun]: https://bun.sh

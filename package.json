@@ -21,9 +21,11 @@
     "expo-location": "~57.0.20",
     "expo-media-library": "~57.0.5",
     "expo-router": "~57.0.25",
+    "expo-sharing": "~57.0.22",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "onnxruntime-web": "^1.30.0",
     "piexifjs": "^1.0.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -54,10 +56,10 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/face-warp && tsc --noEmit -p scripts/image-engine && tsc --noEmit -p scripts/frame-studio",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/face-warp && tsc --noEmit -p scripts/image-engine && tsc --noEmit -p scripts/frame-studio && tsc --noEmit -p scripts/phase4",
     "lint": "expo lint",
     "doctor": "npx expo-doctor",
-    "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js",
+    "postinstall": "node node_modules/@shopify/react-native-skia/scripts/setup-canvaskit.js && node scripts/setup-mediapipe.js && node scripts/setup-ort.js",
     "check:face-warp": "bun --preload ./scripts/face-warp/stubs.ts scripts/face-warp/check.ts",
     "render:face-retouch": "bun --preload ./scripts/image-engine/stubs.ts scripts/face-warp/render.ts",
     "render:film": "bun --preload ./scripts/image-engine/stubs.ts scripts/image-engine/film-render.ts",
@@ -65,7 +67,8 @@
     "test:engine:update": "UPDATE_GOLDEN=1 bun test --preload ./scripts/image-engine/stubs.ts scripts/image-engine",
     "frames:generate": "bun scripts/frame-assets/generate.ts",
     "test:frames": "bun scripts/frame-assets/generate.ts --check && bun test --timeout 120000 --preload ./scripts/frame-studio/setup.ts scripts/frame-studio",
-    "test:frames:update": "UPDATE_GOLDEN=1 bun test --timeout 120000 --preload ./scripts/frame-studio/setup.ts scripts/frame-studio"
+    "test:frames:update": "UPDATE_GOLDEN=1 bun test --timeout 120000 --preload ./scripts/frame-studio/setup.ts scripts/frame-studio",
+    "test:phase4": "bun test --timeout 120000 --preload ./scripts/frame-studio/setup.ts scripts/phase4"
   },
   "private": true
 }

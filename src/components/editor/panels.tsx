@@ -31,15 +31,24 @@ import { showToast } from '@/stores/toastStore';
 import type { CropAspectId, SourceImage } from '@/types/editing';
 import type { LookTab } from '@/types/filters';
 
+import { AutoEnhanceRow } from './AutoEnhanceRow';
 import { CurvesPanel } from './CurvesPanel';
 import type { Brush } from './EditorCanvas';
 import { ADJUST_VIEWS, FILTER_VIEWS, type AdjustView, type FilterView } from './editorNav';
 import { HslPanel } from './HslPanel';
+import { RecommendPanel } from './RecommendPanel';
+import type { FaceStatus } from '@/hooks/useFaces';
+import { RemovalPanel, type RemovalUi } from './RemovalPanel';
+import type { SelectiveUi } from './maskTool';
+import { SelectivePanel } from './SelectivePanel';
 import { SubTabs } from './SubTabs';
 import { ToolSliderPanel } from './ToolSliderPanel';
 
 interface FilterPanelProps {
   thumbImage: SkImage | null;
+  /** Faces in the photo (for 추천). */
+  faceStatus: FaceStatus;
+  faceCount: number;
   view: FilterView;
   onViewChange: (view: FilterView) => void;
   /** Preset category (shared by Presets and Mix). */
@@ -52,7 +61,7 @@ interface FilterPanelProps {
  * the selected look) and My Recipe (saved looks: apply, long press to manage,
  * + to save the current edit).
  */
-export function FilterPanel({ thumbImage, view, onViewChange, tab, onTabChange }: FilterPanelProps) {
+export function FilterPanel({ thumbImage, faceStatus, faceCount, view, onViewChange, tab, onTabChange }: FilterPanelProps) {
   const filterId = useEditorStore((s) => s.present.filterId);
   const intensity = useEditorStore((s) => s.present.intensity);
   const recipeId = useEditorStore((s) => s.present.recipeId);
@@ -139,7 +148,14 @@ export function FilterPanel({ thumbImage, view, onViewChange, tab, onTabChange }
     );
 
   let body: ReactNode;
-  if (view === 'mix') {
+  if (view === 'recommend') {
+    body = (
+      <>
+        {lookRow}
+        <RecommendPanel image={thumbImage} faceStatus={faceStatus} faceCount={faceCount} />
+      </>
+    );
+  } else if (view === 'mix') {
     body = (
       <>
         <View style={styles.intensityRow}>
@@ -228,27 +244,44 @@ export function FilterPanel({ thumbImage, view, onViewChange, tab, onTabChange }
   );
 }
 
-/** 조정: 기본 (light & colour sliders), HSL and 커브 — same edit data, grouped in one menu. */
-export function AdjustMenu({ view, onViewChange }: { view: AdjustView; onViewChange: (view: AdjustView) => void }) {
+/** 조정: 기본 (자동 + light & colour sliders), HSL, 커브 and 선택 보정 — same edit data, grouped in one menu. */
+export function AdjustMenu({
+  view,
+  onViewChange,
+  image,
+  selective,
+  onSelectiveChange,
+}: {
+  view: AdjustView;
+  onViewChange: (view: AdjustView) => void;
+  /** The photo as shown (Auto Enhance analyses it). */
+  image: SkImage | null;
+  selective: SelectiveUi;
+  onSelectiveChange: (ui: SelectiveUi) => void;
+}) {
   return (
     <View>
       <SubTabs options={ADJUST_VIEWS} value={view} onChange={onViewChange} accessibilityLabel="조정 메뉴" />
-      {view === 'basic' ? <AdjustPanel /> : null}
+      {view === 'basic' ? <AdjustPanel image={image} /> : null}
       {view === 'hsl' ? <HslPanel /> : null}
       {view === 'curves' ? <CurvesPanel /> : null}
+      {view === 'selective' ? <SelectivePanel ui={selective} onUiChange={onSelectiveChange} /> : null}
     </View>
   );
 }
 
-export function AdjustPanel() {
+export function AdjustPanel({ image }: { image: SkImage | null }) {
   const values = useEditorStore((s) => s.present.adjustments);
   const { setAdjustment, commit, resetAdjustment } = useEditorStore.getState();
   return (
-    <ToolSliderPanel tools={ADJUST_TOOLS} values={values} onChange={setAdjustment} onCommit={commit} onReset={resetAdjustment} />
+    <View>
+      <AutoEnhanceRow image={image} />
+      <ToolSliderPanel tools={ADJUST_TOOLS} values={values} onChange={setAdjustment} onCommit={commit} onReset={resetAdjustment} />
+    </View>
   );
 }
 
-export type TouchMode = 'push' | 'restore' | 'spot';
+export type TouchMode = 'push' | 'restore' | 'spot' | 'remove';
 
 export interface BrushSettings {
   mode: TouchMode;
@@ -267,7 +300,8 @@ export const DEFAULT_BRUSH: BrushSettings = { mode: 'push', size: 35, strength: 
  * soft brush spreads the same change wider, so less bending); 밀기 content
  * follows 4…30 % of the finger. 잡티: radius 0.5…3.5 %.
  */
-export function toBrush({ mode, size, strength, spotSize }: BrushSettings): Brush {
+export function toBrush({ mode, size, strength, spotSize }: BrushSettings): Brush | null {
+  if (mode === 'remove') return null;
   if (mode === 'spot') return { mode, radius: 0.005 + (spotSize / 100) * 0.03, strength: 0 };
   return { mode, radius: 0.03 + (size / 100) * 0.22, strength: 0.04 + (strength / 100) * 0.26 };
 }
@@ -276,20 +310,45 @@ const TOUCH_MODES = [
   { value: 'push', label: '밀기' },
   { value: 'restore', label: '복원' },
   { value: 'spot', label: '잡티 제거' },
+  { value: 'remove', label: '객체 제거' },
 ] as const;
 
 const TOUCH_HINT: Record<TouchMode, string> = {
   push: '브러시를 넉넉하게 키우고 짧게 여러 번 밀면 자연스러워요.\n과하게 밀린 곳은 복원으로 살짝 문질러 주세요.',
   restore: '문지른 곳이 조금씩 원래 모습으로 돌아와요.\n밀기가 과한 부분만 살살 문질러 주세요.',
   spot: '잡티보다 조금 크게 맞추고 톡 눌러 주세요.\n주변 피부결로 자연스럽게 채워져요.',
+  remove: '',
 };
 
-export function TouchPanel({ brush, onChange }: { brush: BrushSettings; onChange: (b: BrushSettings) => void }) {
+export function TouchPanel({
+  brush,
+  onChange,
+  removal,
+  onRemovalChange,
+}: {
+  brush: BrushSettings;
+  onChange: (b: BrushSettings) => void;
+  removal: RemovalUi;
+  onRemovalChange: (ui: RemovalUi) => void;
+}) {
   const strokes = useEditorStore((s) => s.present.reshape.length);
   const spots = useEditorStore((s) => s.present.spots.length);
   const { clearReshape, clearSpots } = useEditorStore.getState();
   const spot = brush.mode === 'spot';
   const count = spot ? spots : strokes;
+  const modes = (
+    <View style={styles.touchModes}>
+      <SegmentedControl options={TOUCH_MODES} value={brush.mode} onChange={(mode) => onChange({ ...brush, mode })} accessibilityLabel="터치 보정 종류" />
+    </View>
+  );
+  if (brush.mode === 'remove') {
+    return (
+      <View>
+        {modes}
+        <RemovalPanel ui={removal} onChange={onRemovalChange} />
+      </View>
+    );
+  }
 
   const trash = (
     <IconButton
